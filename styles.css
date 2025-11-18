@@ -1,0 +1,100 @@
+:root{
+  --bg:#f7f8fb; --card:#fff; --accent:#0b74de; --muted:#666;
+  --success:#198754; --danger:#dc3545; --sheet-bg:#ffffff;
+  --sheet-shadow: rgba(0,0,0,0.28);
+}
+*{box-sizing:border-box}
+body{font-family:system-ui,Arial,sans-serif;margin:0;background:var(--bg);color:#222}
+.topbar{background:var(--accent);color:#fff;padding:10px 12px;position:sticky;top:0;z-index:10}
+.topbar-row{display:flex;align-items:center;justify-content:space-between}
+.title{font-size:18px;font-weight:600}
+.container{padding:12px;max-width:1100px;margin:0 auto}
+.card{background:var(--card);padding:10px;margin-bottom:12px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,0.06)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row label{display:flex;flex-direction:column;font-size:13px;min-width:130px}
+.row input, select{padding:8px;border:1px solid #ddd;border-radius:6px}
+.actions{margin-top:8px}
+.btn{padding:8px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer;font-weight:600}
+.btn.small{padding:6px 8px;font-size:13px}
+.btn.primary{background:var(--accent);color:#fff;border:none}
+.btn.danger{background:var(--danger);color:#fff;border:none}
+.tabbtn, .subtabbtn{padding:8px 10px;border-radius:6px;border:1px solid #ddd;background:#fafafa;cursor:pointer}
+.tabbtn.active, .subtabbtn.active{background:var(--accent);color:#fff;border:none}
+.note{font-size:13px;color:var(--muted);margin:8px 0}
+.hidden{display:none}
+.wizardBox{padding:8px}
+.angleIndicator{font-size:18px;font-weight:600;margin-bottom:8px}
+.entryRow{margin:8px 0}
+.signedInput{display:flex;align-items:center;gap:6px}
+.sign{font-weight:700;padding:6px 8px;background:#eee;border-radius:6px}
+.hint{font-size:12px;color:var(--muted)}
+.progress{margin-top:8px;font-size:13px;color:var(--muted)}
+.tablesArea .tableRow{display:flex;gap:8px;flex-wrap:wrap}
+.tableCard{flex:1;min-width:280px}
+.tableCard h4{margin:4px 0 6px}
+.tableScroll{max-height:260px;overflow:auto;border:1px solid #eee}
+.table{border-collapse:collapse;width:100%}
+.table th,.table td{border:1px solid #eee;padding:6px;text-align:center;min-width:70px;font-size:13px}
+.plotRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.plotCard{flex:1;min-width:300px;padding:6px}
+.resultsSummary{padding:6px;margin-top:8px;border-top:1px dashed #ddd}
+.footer{padding:10px;text-align:center;font-size:12px;color:#666}
+@media (max-width:700px){
+  .row label{min-width:140px}
+  .plotsArea .plotCard{min-width:300px}
+}
+
+/* ===== Bottom sheet modal styles ===== */
+.bs-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4); /* dim background for sunlight contrast */
+  z-index: 1000;
+  display: none;
+  align-items: flex-end; /* sheet rises from bottom */
+}
+.bs-overlay.show { display:flex; }
+
+.bottom-sheet {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--sheet-bg);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: 0 -10px 30px var(--sheet-shadow);
+  padding: 14px;
+  transform: translateY(100%);
+  transition: transform 280ms cubic-bezier(.25,.8,.25,1);
+  z-index: 1001;
+}
+.bottom-sheet.show { transform: translateY(0%); }
+
+.bs-handle {
+  width: 48px;
+  height: 6px;
+  background: #ddd;
+  border-radius: 6px;
+  margin: 0 auto 8px;
+}
+
+/* Bottom sheet header and options */
+.sheet-title { font-weight:700; font-size:16px; margin-bottom:6px; text-align:center; }
+.sheet-sub { font-size:13px; color:var(--muted); margin-bottom:12px; text-align:center; }
+
+/* Buttons in sheet */
+.sheet-buttons { display:flex; flex-direction:column; gap:10px; padding:6px 4px; }
+.sheet-btn { padding:12px 14px; border-radius:10px; border:1px solid #ddd; font-weight:700; font-size:15px; text-align:center; background:#fff; cursor:pointer; }
+.sheet-btn.primary { background:var(--accent); color:#fff; border:none; box-shadow: 0 2px 6px rgba(11,116,222,0.12); }
+.sheet-btn.secondary { background:#f5f6f8; color:#333; }
+.sheet-btn.ghost { background:transparent; color:var(--muted); border:1px dashed #e6e6e6; }
+
+/* small actions row */
+.sheet-actions { display:flex; gap:8px; justify-content:center; margin-top:8px; }
+.sheet-actions .btn { padding:8px 10px; border-radius:8px; }
+
+/* responsive padding */
+@media (max-width:420px){
+  .bottom-sheet { padding:12px }
+  .sheet-btn { font-size:14px; padding:12px; }
+}
