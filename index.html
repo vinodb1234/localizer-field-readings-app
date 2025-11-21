@@ -40,22 +40,25 @@
 
       <div style="height:16px"></div>
 
-      <!-- Full width NEXT at bottom as requested -->
+      <!-- Full width NEXT at bottom -->
       <div style="position:sticky; bottom:12px; padding:10px; background:transparent">
         <button id="metaNext" class="btn primary" style="width:100%; padding:14px; font-size:16px">NEXT — Choose Readings</button>
       </div>
     </div>
   </div>
 
-  <!-- PAGE 2: CHOOSE READING TYPE -->
+  <!-- PAGE 2: STAGE DASHBOARD (PRESENT / REFERENCE / RESULTS) -->
   <div id="page-stage" class="page hidden">
     <div class="container">
       <div class="card">
-        <h2>Choose Readings</h2>
+        <h2>Dashboard</h2>
         <div class="stage-row">
           <button id="choosePresent" class="stage-btn">Present Readings</button>
           <button id="chooseReference" class="stage-btn">Reference Readings</button>
+          <button id="chooseResults" class="stage-btn" style="display:none" title="View Results & Graphs">Results & Graphs</button>
         </div>
+
+        <div class="note" id="stageProgress"></div>
       </div>
     </div>
   </div>
@@ -66,12 +69,12 @@
       <div class="card">
         <h2>Select Transmitter — <span id="txselectHeader"></span></h2>
         <div class="tx-card-row">
-          <div id="tx1Card" class="tx-card" data-tx="tx1">
+          <div id="tx1Card" class="tx-card" data-tx="tx1" role="button">
             <div class="tx-card-title">TX1</div>
             <div class="tx-card-sub">Transmitter A</div>
             <div class="tx-card-foot" id="tx1Status"></div>
           </div>
-          <div id="tx2Card" class="tx-card" data-tx="tx2">
+          <div id="tx2Card" class="tx-card" data-tx="tx2" role="button">
             <div class="tx-card-title">TX2</div>
             <div class="tx-card-sub">Transmitter B</div>
             <div class="tx-card-foot" id="tx2Status"></div>
@@ -113,18 +116,20 @@
           Angle: <span id="angleValue"></span>°
         </div>
 
-        <!-- DDM row with sign radios for 0° -->
+        <!-- DDM row: for non-zero angle show sign prefix, for 0° show radio (+ / -) -->
         <div class="entryRow">
           <div class="labelCol"><strong>DDM</strong></div>
           <div class="inputCol">
-            <div class="input-with-next">
-              <input id="ddmInput" placeholder="DDM value" inputmode="decimal" autocomplete="off">
+            <div class="input-with-next ddm-row">
+              <span id="ddmSignPrefix" class="signPrefix">+</span>
+              <input id="ddmInput" placeholder="Enter positive value only" inputmode="decimal" autocomplete="off">
               <button id="ddmNext" class="input-next small hidden">⏎</button>
             </div>
             <div id="ddmSignGroup" style="margin-top:6px; display:none;">
               <label style="margin-right:8px"><input type="radio" name="ddmSign" id="ddmPlus" value="+"> +</label>
               <label><input type="radio" name="ddmSign" id="ddmMinus" value="-"> −</label>
             </div>
+            <div class="hint">Enter positive value only. DDM sign is set automatically based on angle (or choose sign at 0°).</div>
           </div>
         </div>
 
@@ -133,9 +138,10 @@
           <div class="labelCol"><strong>SDM</strong></div>
           <div class="inputCol">
             <div class="input-with-next">
-              <input id="sdmInput" placeholder="SDM value" inputmode="decimal" autocomplete="off">
+              <input id="sdmInput" placeholder="Enter positive value only" inputmode="decimal" autocomplete="off">
               <button id="sdmNext" class="input-next small hidden">⏎</button>
             </div>
+            <div class="hint">Enter positive value only.</div>
           </div>
         </div>
 
@@ -144,10 +150,11 @@
           <div class="labelCol"><strong>RF</strong></div>
           <div class="inputCol">
             <div class="input-with-next">
-              <input id="rfInput" placeholder="RF value" inputmode="numeric" autocomplete="off">
+              <span class="signPrefix">-</span>
+              <input id="rfInput" placeholder="Enter positive value only" inputmode="numeric" autocomplete="off">
               <button id="rfNext" class="input-next small hidden">➡</button>
             </div>
-            <div class="hint" style="margin-top:6px">Enter positive number; RF stored as negative</div>
+            <div class="hint">RF stored as negative. Enter the positive magnitude only.</div>
           </div>
         </div>
 
@@ -194,7 +201,7 @@
   </div>
 
   <script>
-    // Path to uploaded Excel file (server path preserved for later processing)
+    // Path to uploaded Excel file
     const UPLOADED_FILE_URL = "/mnt/data/LLZ Field Reading.xls";
   </script>
 
