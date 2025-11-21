@@ -1,15 +1,8 @@
-/* app.js - final implementation reflecting user's confirmed requirements
-   - Sign rules:
-     * DDM negative for negative angles (prefix '-' shown), positive for positive angles (prefix '+')
-     * DDM at 0° -> show radio + / - and user chooses
-     * SDM always positive
-     * RF always stored negative (prefix '-' shown); user enters positive magnitude
-   - Dashboard includes Present / Reference / Results buttons
-   - After finishing a TX: highlight card and show popup guiding user to next TX (or redo)
-   - After both TXs completed for a stage: prompt to move to other stage or view results
-   - Results metadata shown on Results page
-   - Home behaviour: goes to dashboard (if meta filled) or to meta page
-   - Data persist in localStorage
+/* app.js - updated to plot combined TX1/TX2 graphs using absolute (positive) magnitudes
+   - Graphs: TX1 combined (DDM, SDM, RF) present & reference on single chart (single Y-axis)
+             TX2 combined (DDM, SDM, RF) present & reference on single chart (single Y-axis)
+   - Tables still show signed values; plotting uses Math.abs(...) for magnitudes
+   - UPLOADED_FILE_URL preserved for future file import
 */
 
 const ANGLES = [
@@ -18,7 +11,7 @@ const ANGLES = [
   0,0.5,1,1.5,2,2.5,3,4,5,6,7,8,9,10,11,12,13,14,20,25,30,35
 ];
 
-const STORAGE_KEY = 'llz_final_v3';
+const STORAGE_KEY = 'llz_final_v4';
 
 let state = {
   meta: { station:'', freq:'', make:'', model:'', refDate:'', presDate:'', course:'' },
@@ -35,7 +28,6 @@ function initArrays(){
 }
 initArrays();
 
-// helpers
 function $(id){ return document.getElementById(id); }
 function el(tag, cls){ const e=document.createElement(tag); if(cls) e.className = cls; return e; }
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -49,7 +41,6 @@ function loadState(){
       if(l.current) state.current = Object.assign(state.current, l.current);
     }catch(e){ console.warn(e); initArrays(); }
   }
-  // ensure arrays lengths
   ['tx1','tx2'].forEach(tx=>{ ['present','reference'].forEach(stage=>{
     if(!Array.isArray(state.values[tx][stage]) || state.values[tx][stage].length !== ANGLES.length) state.values[tx][stage] = ANGLES.map(()=>({DDM:null, SDM:null, RF:null}));
   })});
@@ -57,37 +48,21 @@ function loadState(){
 }
 loadState();
 
-// page switching
-function showPage(id){ document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden')); const e = $(id); if(e) e.classList.remove('hidden'); window.scrollTo(0,0); }
+// page helpers
+function showPage(id){ document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden')); const e=$(id); if(e) e.classList.remove('hidden'); window.scrollTo(0,0); }
 
 // meta
 function populateMetaFromUI(){ state.meta.station = $('station').value.trim(); state.meta.freq = $('freq').value.trim(); state.meta.make = $('make').value.trim(); state.meta.model = $('model').value.trim(); state.meta.refDate = $('refDate').value.trim(); state.meta.presDate = $('presDate').value.trim(); state.meta.course = $('course').value.trim(); saveState(); updateDashboardButtons(); }
 function formatDateOK(s){ return /^\d{2}-\d{2}-\d{4}$/.test(s); }
 function applyHeaderCheck(){ const ref = $('refDate').value.trim(), pres = $('presDate').value.trim(); if(!formatDateOK(ref) || !formatDateOK(pres)){ alert('Enter dates in DD-MM-YYYY'); return false; } return true; }
 
-// bottom sheet & toast utilities
+// bottom sheet / toast
 function createBottomSheet(){ if(document.querySelector('.bs-overlay')) return; const overlay = el('div','bs-overlay'); overlay.innerHTML = `<div class="bottom-sheet"><div class="bs-handle"></div><div class="sheet-title" id="sheetTitle"></div><div class="sheet-sub" id="sheetSub"></div><div class="sheet-buttons" id="sheetButtons"></div></div>`; document.body.appendChild(overlay); overlay.addEventListener('click', e=>{ if(e.target===overlay) hideBottomSheet(); }); }
-function showBottomSheet(title, sub, buttons){
-  createBottomSheet();
-  const overlay = document.querySelector('.bs-overlay');
-  const sheet = overlay.querySelector('.bottom-sheet');
-  overlay.classList.add('show');
-  setTimeout(()=> sheet.classList.add('show'), 20);
-  $('sheetTitle').textContent = title || '';
-  $('sheetSub').textContent = sub || '';
-  const container = $('sheetButtons');
-  container.innerHTML = '';
-  buttons.forEach(b=>{
-    const btn = el('button','sheet-btn'); btn.textContent = b.label;
-    if(b.kind === 'primary') btn.classList.add('primary');
-    btn.onclick = ()=> { hideBottomSheet(); setTimeout(()=> b.action && b.action(), 240); };
-    container.appendChild(btn);
-  });
-}
-function hideBottomSheet(){ const overlay = document.querySelector('.bs-overlay'); if(!overlay) return; const sheet = overlay.querySelector('.bottom-sheet'); sheet.classList.remove('show'); setTimeout(()=> overlay.classList.remove('show'),260); }
-function showToast(msg, ms=1500){ let t = document.querySelector('.toast'); if(!t){ t = el('div','toast'); document.body.appendChild(t); } t.textContent = msg; t.classList.add('show'); setTimeout(()=> t.classList.remove('show'), ms); }
+function showBottomSheet(title, sub, buttons){ createBottomSheet(); const overlay = document.querySelector('.bs-overlay'); const sheet = overlay.querySelector('.bottom-sheet'); overlay.classList.add('show'); setTimeout(()=> sheet.classList.add('show'),20); $('sheetTitle').textContent = title||''; $('sheetSub').textContent = sub||''; const c = $('sheetButtons'); c.innerHTML=''; buttons.forEach(b=>{ const btn = el('button','sheet-btn'); btn.textContent = b.label; if(b.kind==='primary') btn.classList.add('primary'); btn.onclick = ()=>{ hideBottomSheet(); setTimeout(()=> b.action && b.action(),240); }; c.appendChild(btn); }); }
+function hideBottomSheet(){ const overlay=document.querySelector('.bs-overlay'); if(!overlay) return; const sheet=overlay.querySelector('.bottom-sheet'); sheet.classList.remove('show'); setTimeout(()=> overlay.classList.remove('show'),260); }
+function showToast(msg,ms=1500){ let t = document.querySelector('.toast'); if(!t){ t = el('div','toast'); document.body.appendChild(t); } t.textContent = msg; t.classList.add('show'); setTimeout(()=> t.classList.remove('show'), ms); }
 
-// wizard helpers
+// wizard helpers & sign UI
 function getOrderIndex(idx){ return state.current.direction === 'neg2pos' ? idx : (ANGLES.length - 1 - idx); }
 
 function updateDDMSignUI(angle, saved){
@@ -96,7 +71,6 @@ function updateDDMSignUI(angle, saved){
   if(angle === 0){
     prefix.style.display = 'none';
     signGroup.style.display = 'block';
-    // set radio based on saved value or default plus
     if(saved && saved.DDM !== null){
       if(saved.DDM < 0) $('ddmMinus').checked = true;
       else $('ddmPlus').checked = true;
@@ -106,7 +80,7 @@ function updateDDMSignUI(angle, saved){
   } else {
     signGroup.style.display = 'none';
     prefix.style.display = 'inline-block';
-    if(angle < 0) prefix.textContent = '−'; else prefix.textContent = '+';
+    prefix.textContent = angle < 0 ? '−' : '+';
   }
 }
 
@@ -146,23 +120,19 @@ function wizardSaveCurrent(){
   if(sdmNum !== null && isNaN(sdmNum)){ alert('SDM must be numeric'); return false; }
   if(rfNum !== null && isNaN(rfNum)){ alert('RF must be numeric'); return false; }
 
-  // Apply sign rules:
-  // DDM
+  // DDM sign rules
   if(ddmNum !== null){
     if(angle < 0) ddmNum = -Math.abs(ddmNum);
     else if(angle > 0) ddmNum = Math.abs(ddmNum);
     else {
-      // 0° -> use radio
       const sel = document.querySelector('input[name="ddmSign"]:checked');
       if(sel && sel.value === '-') ddmNum = -Math.abs(ddmNum);
       else ddmNum = Math.abs(ddmNum);
     }
   }
-
   // SDM always positive
   if(sdmNum !== null) sdmNum = Math.abs(sdmNum);
-
-  // RF always negative (user enters positive)
+  // RF always negative
   if(rfNum !== null) rfNum = -Math.abs(rfNum);
 
   state.values[tx][stage][orderIdx] = { DDM: ddmNum, SDM: sdmNum, RF: rfNum };
@@ -183,15 +153,13 @@ function updateNextButtonsVisibility(){
   if(rfn) rfn.classList.toggle('hidden', rfVal === '');
 }
 
-// flow & dashboard
+// dashboard & flow
 function updateDashboardButtons(){
-  // show results button only if at least one reading exists
   const anyPresent = isStageComplete('tx1','present') || isStageComplete('tx2','present');
   const anyRef = isStageComplete('tx1','reference') || isStageComplete('tx2','reference');
   const chooseResults = $('chooseResults');
   if(chooseResults){
-    if(anyPresent || anyRef) chooseResults.style.display = 'inline-block';
-    else chooseResults.style.display = 'none';
+    chooseResults.style.display = (anyPresent || anyRef) ? 'inline-block' : 'none';
   }
   const progress = $('stageProgress');
   if(progress){
@@ -218,17 +186,13 @@ function updateTxCardStatus(){
     const refDone = isStageComplete(tx,'reference');
     const foot = tx === 'tx1' ? $('tx1Status') : $('tx2Status');
     if(foot) foot.textContent = `P:${presentDone? '✓':'—'}  R:${refDone? '✓':'—'}`;
-    if(card){
-      card.classList.toggle('completed', presentDone && refDone);
-    }
+    if(card){ card.classList.toggle('completed', presentDone && refDone); }
   });
 }
 
-// choose tx -> show direction
 function onTxChosen(tx){
   state.current.tx = tx;
   $('dirHeader').textContent = `Select Angle Direction for ${tx.toUpperCase()} (${state.current.stage.toUpperCase()})`;
-  // restore last direction choice for convenience if any
   if(state.current.direction === 'pos2neg') $('dirPos2Neg').checked = true; else $('dirNeg2Pos').checked = true;
   showPage('page-direction');
 }
@@ -243,19 +207,16 @@ function onDirectionContinue(){
   showWizardForCurrent();
 }
 
-// finish tx: save and return to tx selection with prompts
 function finishTxAndBack(){
   if(!wizardSaveCurrent()) return;
   const finishedTx = state.current.tx;
   const stage = state.current.stage;
   showToast(`${finishedTx.toUpperCase()} ${stage.toUpperCase()} saved`);
-  // reset selection
   state.current.tx = null;
   state.current.idx = 0;
   saveState();
   updateTxCardStatus();
 
-  // If both TXs complete for this stage -> prompt to go to other stage or results
   const bothDoneThisStage = isStageComplete('tx1', stage) && isStageComplete('tx2', stage);
   if(bothDoneThisStage){
     const otherStage = (stage === 'present') ? 'reference' : 'present';
@@ -271,7 +232,6 @@ function finishTxAndBack(){
       );
       return;
     }
-    // suggest to continue with other stage
     showBottomSheet(
       `${stage.toUpperCase()} readings completed`,
       `Proceed to ${otherStage.toUpperCase()} readings?`,
@@ -282,20 +242,18 @@ function finishTxAndBack(){
       ]
     );
   } else {
-    // if only one TX done now, prompt to go to other TX (or redo)
     showBottomSheet(
       `${finishedTx.toUpperCase()} ${stage.toUpperCase()} completed`,
       `What would you like to do next for ${stage.toUpperCase()}?`,
       [
-        { label: `Enter other TX (${ finishedTx === 'tx1' ? 'TX2' : 'TX1' })`, kind:'primary', action: ()=> { startStage(stage); /* returns to tx selection */ } },
-        { label: `Redo ${finishedTx.toUpperCase()}`, kind:'secondary', action: ()=> { /* reopen same tx */ state.current.tx = finishedTx; showPage('page-direction'); } },
+        { label: `Enter other TX (${ finishedTx === 'tx1' ? 'TX2' : 'TX1' })`, kind:'primary', action: ()=> { startStage(stage); } },
+        { label: `Redo ${finishedTx.toUpperCase()}`, kind:'secondary', action: ()=> { state.current.tx = finishedTx; showPage('page-direction'); } },
         { label: 'View Results', kind:'ghost', action: ()=> { populateResultsMeta(); buildAllTables(); showPage('page-results'); } }
       ]
     );
   }
 }
 
-// completion check
 function isStageComplete(tx, stage){
   const arr = state.values[tx][stage];
   for(let i=0;i<arr.length;i++){
@@ -305,7 +263,7 @@ function isStageComplete(tx, stage){
   return true;
 }
 
-// results & tables
+// results / tables / compute
 function populateResultsMeta(){
   const m = state.meta;
   const el = $('resultsMeta');
@@ -340,7 +298,7 @@ function buildAllTables(){
   container.classList.remove('hidden');
 }
 
-// compute & plot (DDM)
+// New: calculate absolute arrays for plotting and diff
 let charts = {};
 function calculateAll(){
   const compiled = {};
@@ -348,35 +306,117 @@ function calculateAll(){
     compiled[tx] = {};
     ['present','reference'].forEach(t=>{
       const arr = state.values[tx][t];
-      compiled[tx][t] = { ddm: arr.map(x=> x.DDM===null ? NaN : x.DDM) };
+      // absolute magnitudes for plotting
+      compiled[tx][t] = {
+        ddm_abs: arr.map(x => x.DDM === null ? NaN : Math.abs(x.DDM)),
+        sdm_abs: arr.map(x => x.SDM === null ? NaN : Math.abs(x.SDM)),
+        rf_abs:  arr.map(x => x.RF  === null ? NaN : Math.abs(x.RF))
+      };
     });
-    compiled[tx].ddm_diff = compiled[tx].reference.ddm.map((v,i)=> (isNaN(v) || isNaN(compiled[tx].present.ddm[i])) ? NaN : v - compiled[tx].present.ddm[i]);
+    // difference of signed DDM (reference - present) preserved but for graphing we will use abs values
+    const refSigned = state.values[tx].reference.map(x => x.DDM === null ? NaN : x.DDM);
+    const presSigned = state.values[tx].present.map(x => x.DDM === null ? NaN : x.DDM);
+    compiled[tx].ddm_diff_signed = refSigned.map((v,i) => (isNaN(v) || isNaN(presSigned[i])) ? NaN : v - presSigned[i]);
   });
-  state.compiled = compiled; saveState();
-  try{ plotAllCharts(compiled); }catch(e){ console.warn(e); }
+  state.compiled = compiled;
+  saveState();
+  try{ plotCombinedGraphs(compiled); } catch(e){ console.warn('plot error', e); }
   renderSummary(compiled);
 }
 
-function plotAllCharts(compiled){
-  function plot(id, arr){
-    const c = document.getElementById(id); if(!c) return;
-    const ctx = c.getContext('2d');
-    if(charts[id]) charts[id].destroy();
-    charts[id] = new Chart(ctx, {
+// Plot combined graphs (single y-axis) using absolute magnitudes
+function plotCombinedGraphs(compiled){
+  // Colors
+  const colors = {
+    ddm_pres: 'rgb(2, 119, 189)',
+    ddm_ref:  'rgba(2,119,189,0.45)',
+    sdm_pres: 'rgb(22, 160, 133)',
+    sdm_ref:  'rgba(22,160,133,0.45)',
+    rf_pres:  'rgb(192, 57, 43)',
+    rf_ref:   'rgba(192,57,43,0.45)'
+  };
+
+  const makeDataset = (label, data, color, dash=false) => ({
+    label,
+    data,
+    fill: false,
+    borderColor: color,
+    backgroundColor: color,
+    tension: 0.15,
+    pointRadius: 2,
+    borderDash: dash ? [6,4] : []
+  });
+
+  // TX1
+  const tx1 = compiled.tx1;
+  const datasets1 = [
+    makeDataset('DDM Present', tx1.present.ddm_abs, colors.ddm_pres),
+    makeDataset('DDM Reference', tx1.reference.ddm_abs, colors.ddm_ref, false),
+    makeDataset('SDM Present', tx1.present.sdm_abs, colors.sdm_pres),
+    makeDataset('SDM Reference', tx1.reference.sdm_abs, colors.sdm_ref, false),
+    makeDataset('RF Present', tx1.present.rf_abs, colors.rf_pres),
+    makeDataset('RF Reference', tx1.reference.rf_abs, colors.rf_ref, false)
+  ];
+  const c1 = document.getElementById('chart_tx1_all');
+  if(c1){
+    if(charts['chart_tx1_all']) charts['chart_tx1_all'].destroy();
+    const ctx1 = c1.getContext('2d');
+    charts['chart_tx1_all'] = new Chart(ctx1, {
       type: 'line',
-      data: { labels: ANGLES, datasets: [{ label: 'DDM', data: arr }] },
-      options: { scales:{ x:{ title:{display:true, text:'Angle (°)'} } } }
+      data: { labels: ANGLES, datasets: datasets1 },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        stacked: false,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          x: { title: { display:true, text: 'Angle (°)' } },
+          y: { title: { display:true, text: 'Magnitude (absolute values)' }, beginAtZero: true }
+        }
+      }
     });
   }
-  plot('chart_tx1_ddm', state.compiled && state.compiled.tx1 ? state.compiled.tx1.present.ddm || [] : []);
-  plot('chart_tx2_ddm', state.compiled && state.compiled.tx2 ? state.compiled.tx2.present.ddm || [] : []);
+
+  // TX2
+  const tx2 = compiled.tx2;
+  const datasets2 = [
+    makeDataset('DDM Present', tx2.present.ddm_abs, colors.ddm_pres),
+    makeDataset('DDM Reference', tx2.reference.ddm_abs, colors.ddm_ref, false),
+    makeDataset('SDM Present', tx2.present.sdm_abs, colors.sdm_pres),
+    makeDataset('SDM Reference', tx2.reference.sdm_abs, colors.sdm_ref, false),
+    makeDataset('RF Present', tx2.present.rf_abs, colors.rf_pres),
+    makeDataset('RF Reference', tx2.reference.rf_abs, colors.rf_ref, false)
+  ];
+  const c2 = document.getElementById('chart_tx2_all');
+  if(c2){
+    if(charts['chart_tx2_all']) charts['chart_tx2_all'].destroy();
+    const ctx2 = c2.getContext('2d');
+    charts['chart_tx2_all'] = new Chart(ctx2, {
+      type: 'line',
+      data: { labels: ANGLES, datasets: datasets2 },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        stacked: false,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          x: { title: { display:true, text: 'Angle (°)' } },
+          y: { title: { display:true, text: 'Magnitude (absolute values)' }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  // reveal plots area
+  $('plotsArea').classList.remove('hidden');
 }
 
+// render summary (keeps small sample shown)
 function renderSummary(compiled){
   const out = [];
   ['tx1','tx2'].forEach(tx=>{
     out.push(`--- ${tx.toUpperCase()} ---`);
-    out.push(`Sample DDM diffs: ${compiled[tx].ddm_diff.slice(0,5).map(v=> isNaN(v)?'NA':v).join(', ')}`);
+    out.push(`Sample DDM signed diffs (first 6): ${compiled[tx].ddm_diff_signed.slice(0,6).map(v=> isNaN(v)?'NA':v).join(', ')}`);
     out.push('');
   });
   $('resultsSummary').textContent = out.join('\n');
@@ -421,10 +461,10 @@ async function exportPdf(){
   }catch(e){ alert('PDF error: '+e); } finally{ document.body.removeChild(printDiv); }
 }
 
-// wiring UI
+// wiring
 document.addEventListener('DOMContentLoaded', ()=>{
 
-  // meta fields
+  // populate meta
   $('station').value = state.meta.station || '';
   $('freq').value = state.meta.freq || '';
   $('make').value = state.meta.make || '';
@@ -433,7 +473,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('presDate').value = state.meta.presDate || '';
   $('course').value = state.meta.course || '';
 
-  // HOME button: go to dashboard if meta filled else go to meta page
+  // home
   $('btnHome').addEventListener('click', ()=>{
     if(state.meta && state.meta.station) { updateDashboardButtons(); showPage('page-stage'); }
     else showPage('page-meta');
@@ -450,16 +490,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // clear saved
   $('clearAll').addEventListener('click', ()=>{ if(confirm('Clear all saved local entries?')){ localStorage.removeItem(STORAGE_KEY); location.reload(); } });
 
-  // stage dashboard handlers
+  // stage
   $('choosePresent').addEventListener('click', ()=>{ if(!applyHeaderCheck()) return; populateMetaFromUI(); startStage('present'); });
   $('chooseReference').addEventListener('click', ()=>{ if(!applyHeaderCheck()) return; populateMetaFromUI(); startStage('reference'); });
   $('chooseResults').addEventListener('click', ()=>{ populateResultsMeta(); buildAllTables(); showPage('page-results'); });
 
-  // tx card clicks
+  // tx cards
   $('tx1Card').addEventListener('click', ()=> onTxChosen('tx1'));
   $('tx2Card').addEventListener('click', ()=> onTxChosen('tx2'));
 
-  // direction page
+  // direction
   $('dirContinue').addEventListener('click', onDirectionContinue);
   $('dirBack').addEventListener('click', ()=> showPage('page-txselect'));
 
@@ -469,12 +509,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('saveAngle').addEventListener('click', ()=>{ wizardSaveCurrent(); showToast('Saved'); });
   $('finishWizard').addEventListener('click', ()=> finishTxAndBack());
 
-  // next small buttons
+  // small NEXTs
   if($('ddmNext')) $('ddmNext').addEventListener('click', ()=> $('sdmInput').focus());
   if($('sdmNext')) $('sdmNext').addEventListener('click', ()=> $('rfInput').focus());
   if($('rfNext')) $('rfNext').addEventListener('click', ()=> { wizardSaveCurrent(); wizardNext(); });
 
-  // show/hide next buttons on input
+  // input visibility / enter
   ['ddmInput','sdmInput','rfInput'].forEach(id=>{
     const e = $(id); if(!e) return;
     e.addEventListener('input', updateNextButtonsVisibility);
@@ -488,16 +528,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
   });
 
-  // results actions
+  // results
   $('showTables').addEventListener('click', ()=> { buildAllTables(); $('tablesArea').classList.toggle('hidden'); });
   $('calcAll').addEventListener('click', ()=> { calculateAll(); $('plotsArea').classList.remove('hidden'); });
   $('exportCsvBtn').addEventListener('click', exportCsv);
   $('exportPdfBtn').addEventListener('click', exportPdf);
   $('exportImgsBtn').addEventListener('click', ()=> exportPdf());
 
-  // initialize
+  // init UI
   updateTxCardStatus();
   updateDashboardButtons();
-  // show meta if not filled else show dashboard
   if(state.meta && state.meta.station) showPage('page-stage'); else showPage('page-meta');
 });
