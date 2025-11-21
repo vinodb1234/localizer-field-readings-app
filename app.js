@@ -1,5 +1,11 @@
-/* app.js - updated with bottom-sheet guided flow (flexible)
-   Keep the rest of the features (wizard, autosave, charts, export) intact.
+/* app.js - final updated version with:
+   - alternating TX direction logic
+   - bottom-sheet guided flow (flexible)
+   - toast notifications (A3)
+   - NEXT (⏎ / ➡) small rounded buttons next to inputs (style B)
+   - fixed angle indexing and defaults
+   - improved mobile spacing for tabs
+   - retains autosave, charts, export features
 */
 
 const ANGLES = [
@@ -8,16 +14,16 @@ const ANGLES = [
   0,0.5,1,1.5,2,2.5,3,4,5,6,7,8,9,10,11,12,13,14,20,25,30,35
 ];
 
-const COLUMNS = ['DDM','SDM','RF'];
 const STORAGE_KEY = 'llz_data_v1';
 
-// ---------- App state ----------
+// app state
 let state = {
   meta: { station:'', freq:'', make:'', model:'', refDate:'', presDate:'', course:'' },
   values: { tx1: { present:[], reference:[] }, tx2: { present:[], reference:[] } },
   current: { tx:'tx1', type:'present', direction:'neg2pos', idx:0 }
 };
 
+// initialize arrays
 function initArrays(){
   ['tx1','tx2'].forEach(tx=>{
     ['present','reference'].forEach(t=>{
@@ -27,7 +33,7 @@ function initArrays(){
 }
 initArrays();
 
-// utilities
+// utils
 function $(id){ return document.getElementById(id); }
 function el(tag, cls){ const e=document.createElement(tag); if(cls) e.className=cls; return e; }
 function formatDateOK(s){ return /^\d{2}-\d{2}-\d{4}$/.test(s); }
@@ -37,24 +43,30 @@ function loadState(){
   if(raw){
     try{
       const loaded = JSON.parse(raw);
-      // basic merge
       if(loaded.meta) state.meta = Object.assign(state.meta, loaded.meta);
-      if(loaded.values) state.values = Object.assign(state.values, loaded.values);
-      if(loaded.current) state.current = Object.assign(state.current, loaded.current);
-      // ensure arrays correct length
-      ['tx1','tx2'].forEach(tx=>{
-        ['present','reference'].forEach(t=>{
-          if(!state.values[tx] || !state.values[tx][t] || state.values[tx][t].length !== ANGLES.length){
-            state.values[tx][t] = ANGLES.map(()=>({DDM:null,SDM:null,RF:null}));
+      if(loaded.values) {
+        // deep-merge to be safe
+        Object.keys(loaded.values).forEach(tx=>{
+          if(loaded.values[tx]) {
+            ['present','reference'].forEach(t=>{
+              if(Array.isArray(loaded.values[tx][t]) && loaded.values[tx][t].length === ANGLES.length){
+                state.values[tx][t] = loaded.values[tx][t];
+              }
+            });
           }
         });
-      });
+      }
+      if(loaded.current) state.current = Object.assign(state.current, loaded.current);
     }catch(e){ console.warn('loadState failed',e); initArrays(); }
   }
+  // safety defaults
+  if(!state.current.direction) state.current.direction = 'neg2pos';
+  if(!state.current.tx) state.current.tx = 'tx1';
+  if(!state.current.type) state.current.type = 'present';
+  saveState();
 }
 function clearSaved(){ localStorage.removeItem(STORAGE_KEY); initArrays(); state.meta={station:'',freq:'',make:'',model:'',refDate:'',presDate:'',course:''}; state.current={tx:'tx1',type:'present',direction:'neg2pos',idx:0}; saveState(); }
 
-// load initial state
 loadState();
 
 // ---------- UI navigation ----------
@@ -63,6 +75,8 @@ function showPage(id){
   $(id).classList.remove('hidden');
   window.scrollTo(0,0);
 }
+
+// populate meta
 function populateMetaFromUI(){
   state.meta.station = $('station').value.trim();
   state.meta.freq = $('freq').value.trim();
@@ -73,6 +87,7 @@ function populateMetaFromUI(){
   state.meta.course = $('course').value.trim();
   saveState();
 }
+
 function applyHeaderCheck(){
   const ref = $('refDate').value.trim();
   const pres = $('presDate').value.trim();
@@ -83,9 +98,8 @@ function applyHeaderCheck(){
   return true;
 }
 
-// ---------- Bottom sheet helpers ----------
+// ---------- Bottom sheet & toast helpers ----------
 function createBottomSheetDOM(){
-  // avoid duplicate overlay
   if(document.querySelector('.bs-overlay')) return;
   const overlay = el('div','bs-overlay');
   overlay.innerHTML = `
@@ -103,7 +117,6 @@ function createBottomSheetDOM(){
   });
 }
 function showBottomSheet(title, subtitle, buttons){
-  // buttons: [{label, kind:'primary'|'secondary'|'ghost', action: function}]
   createBottomSheetDOM();
   const overlay = document.querySelector('.bs-overlay');
   const sheet = overlay.querySelector('.bottom-sheet');
@@ -120,13 +133,11 @@ function showBottomSheet(title, subtitle, buttons){
     else if(btn.kind === 'ghost') b.classList.add('ghost');
     b.textContent = btn.label;
     b.onclick = ()=> {
-      // auto-close then run action
       hideBottomSheet();
       setTimeout(()=> { if(typeof btn.action === 'function') btn.action(); }, 280);
     };
     container.appendChild(b);
   });
-  // extra actions row (optional) - clear
   $('sheetActions').innerHTML = '<button class="btn" onclick="hideBottomSheet()">Close</button>';
 }
 function hideBottomSheet(){
@@ -137,10 +148,20 @@ function hideBottomSheet(){
   setTimeout(()=> overlay.classList.remove('show'), 260);
 }
 
+function showToast(msg, ms=1800){
+  let t = document.querySelector('.toast');
+  if(!t){
+    t = el('div','toast');
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), ms);
+}
+
 // ---------- Wizard helpers ----------
 function getAngleIndexByOrder(idx){
-  if(state.current.direction === 'neg2pos') return idx;
-  return ANGLES.length - 1 - idx;
+  return (state.current.direction === 'neg2pos') ? idx : (ANGLES.length - 1 - idx);
 }
 function showWizardForCurrent(){
   const tx = state.current.tx, type = state.current.type;
@@ -153,7 +174,8 @@ function showWizardForCurrent(){
   $('wizardTitle').textContent = `Entering ${tx.toUpperCase()} — ${type.toUpperCase()}`;
   $('wizardMeta').textContent = `Station: ${state.meta.station || '-'}  REF: ${state.meta.refDate || '-'}  PRES: ${state.meta.presDate || '-'}`;
   const saved = state.values[tx][type][orderIdx];
-  // set DDM sign UI
+
+  // DDM sign handling
   if(angle === 0){
     $('ddmSign').textContent = (saved && saved._ddmSign) ? saved._ddmSign : '+';
     $('ddmSign').style.display = 'inline-block';
@@ -163,12 +185,21 @@ function showWizardForCurrent(){
     $('ddmSign').style.display = 'inline-block';
     $('ddmSign').onclick = null;
   }
+
+  // populate values
   $('ddmInput').value = (saved && saved.DDM !== null) ? Math.abs(saved.DDM) : '';
   $('sdmInput').value = (saved && saved.SDM !== null) ? Math.abs(saved.SDM) : '';
   $('rfInput').value = (saved && saved.RF !== null) ? Math.abs(saved.RF) : '';
+
+  // set visibility of NEXT buttons based on presence
+  updateNextButtonsVisibility();
+
   $('wizardProgress').textContent = `Angle ${state.current.idx+1} of ${ANGLES.length}`;
+  // ensure the direction dropdown reflects state for visual clarity (if user returns)
+  if($('angleDirection')) $('angleDirection').value = state.current.direction || 'neg2pos';
 }
 
+// save current angle
 function wizardSaveCurrent(){
   const tx = state.current.tx, type = state.current.type;
   const orderIdx = getAngleIndexByOrder(state.current.idx);
@@ -182,7 +213,7 @@ function wizardSaveCurrent(){
   if(ddmNum !== null && isNaN(ddmNum)){ alert('DDM must be numeric or blank'); return false; }
   if(sdmNum !== null && isNaN(sdmNum)){ alert('SDM must be numeric or blank'); return false; }
   if(rfNum !== null  && isNaN(rfNum)){ alert('RF must be numeric or blank'); return false; }
-  // apply signs
+
   if(ddmNum !== null){
     if(angle < 0) ddmNum = -Math.abs(ddmNum);
     else if(angle > 0) ddmNum = Math.abs(ddmNum);
@@ -190,16 +221,17 @@ function wizardSaveCurrent(){
   }
   if(sdmNum !== null) sdmNum = Math.abs(sdmNum);
   if(rfNum !== null) rfNum = -Math.abs(rfNum);
+
   state.values[tx][type][orderIdx] = { DDM: ddmNum, SDM: sdmNum, RF: rfNum, _ddmSign: (angle===0? $('ddmSign').textContent : (angle<0?'-':'+')) };
   saveState();
   return true;
 }
 
+// navigation
 function wizardNext(){
   if(!wizardSaveCurrent()) return;
   state.current.idx++;
-  const total = ANGLES.length;
-  if(state.current.idx >= total) state.current.idx = total -1;
+  if(state.current.idx >= ANGLES.length) state.current.idx = ANGLES.length - 1;
   showWizardForCurrent();
 }
 function wizardPrev(){
@@ -209,9 +241,24 @@ function wizardPrev(){
   showWizardForCurrent();
 }
 
-// ---------- New: Next-step logic after saving/finish ----------
+// NEXT-buttons behavior (move focus / next angle)
+function updateNextButtonsVisibility(){
+  // DDM Next
+  const ddmVal = $('ddmInput').value.trim();
+  const dbtn = $('ddmNext');
+  if(ddmVal !== '') dbtn.classList.add('visible'); else dbtn.classList.remove('visible');
+  // SDM Next
+  const sdmVal = $('sdmInput').value.trim();
+  const sbtn = $('sdmNext');
+  if(sdmVal !== '') sbtn.classList.add('visible'); else sbtn.classList.remove('visible');
+  // RF Next
+  const rfVal = $('rfInput').value.trim();
+  const rbtn = $('rfNext');
+  if(rfVal !== '') rbtn.classList.add('visible'); else rbtn.classList.remove('visible');
+}
+
+// ---------- Direction / switching logic ----------
 function isStageComplete(tx, type){
-  // consider complete if at least one of DDM/SDM/RF is filled for every angle
   const arr = state.values[tx][type];
   for(let i=0;i<arr.length;i++){
     const r = arr[i];
@@ -220,140 +267,78 @@ function isStageComplete(tx, type){
   return true;
 }
 
+// compute opposite direction string
+function oppositeDirection(dir){
+  return (dir === 'neg2pos') ? 'pos2neg' : 'neg2pos';
+}
+
+// show modal after saving/finish
 function showNextStepModal(afterTx, afterType){
-  // build recommended sequence based on current saved state, but keep it flexible (user may choose any)
   const txOther = (afterTx === 'tx1') ? 'tx2' : 'tx1';
   const bothPresentDone = isStageComplete('tx1','present') && isStageComplete('tx2','present');
-  // title & subtitle
   const title = `${afterTx.toUpperCase()} ${afterType.toUpperCase()} saved`;
   const subtitle = 'What would you like to do next?';
-
-  // build buttons array in recommended order:
   const buttons = [];
 
-  // Recommendation logic:
+  // logic: if user just finished PRESENT, recommend the other present if not done; if both present done recommend references
   if(afterType === 'present'){
-    // prioritize remaining present if not done
     if(!isStageComplete(txOther,'present')){
-      buttons.push({ label: `Enter ${txOther.toUpperCase()} PRESENT`, kind:'primary', action: ()=> { jumpToWizard(txOther,'present'); } });
+      // recommend other present; but also auto-set opposite direction for other TX
+      buttons.push({
+        label: `Enter ${txOther.toUpperCase()} PRESENT`,
+        kind:'primary',
+        action: ()=> {
+          // set direction opposite automatically and show toast message
+          state.current.tx = txOther;
+          state.current.type = 'present';
+          state.current.direction = oppositeDirection(state.current.direction);
+          state.current.idx = 0;
+          saveState();
+          showToast(`Direction auto-switched: ${state.current.direction === 'neg2pos' ? '-35 → +35' : '+35 → -35'}`);
+          setTimeout(()=> { showWizardForCurrent(); showPage('page-wizard'); }, 350);
+        }
+      });
     } else {
-      // both Presents done -> recommend references
-      buttons.push({ label: `Enter ${afterTx.toUpperCase()} REFERENCE`, kind:'primary', action: ()=> { jumpToWizard(afterTx,'reference'); } });
+      // both present done → recommend reference for same tx
+      buttons.push({
+        label: `Enter ${afterTx.toUpperCase()} REFERENCE`,
+        kind:'primary',
+        action: ()=> { state.current.tx = afterTx; state.current.type = 'reference'; state.current.idx = 0; saveState(); showPage('page-wizard'); showWizardForCurrent(); }
+      });
     }
-    // still offer other choices (flexible)
-    buttons.push({ label: `Enter ${afterTx.toUpperCase()} PRESENT (edit)`, kind:'secondary', action: ()=> { jumpToWizard(afterTx,'present'); } });
-    buttons.push({ label: `Enter ${txOther.toUpperCase()} REFERENCE`, kind:'secondary', action: ()=> { jumpToWizard(txOther,'reference'); } });
+
+    // additional flexible choices
+    buttons.push({ label: `Edit ${afterTx.toUpperCase()} PRESENT`, kind:'secondary', action: ()=> { state.current.tx = afterTx; state.current.type = 'present'; state.current.idx = 0; saveState(); showWizardForCurrent(); showPage('page-wizard'); } });
+    buttons.push({ label: `Enter ${txOther.toUpperCase()} REFERENCE`, kind:'secondary', action: ()=> { state.current.tx = txOther; state.current.type = 'reference'; state.current.idx = 0; saveState(); showWizardForCurrent(); showPage('page-wizard'); } });
     buttons.push({ label: `View Results`, kind:'ghost', action: ()=> { showPage('page-results'); } });
-  } else { // afterType === 'reference'
-    // recommend the other reference if not done
+  } else {
+    // after finishing reference
     if(!isStageComplete(txOther,'reference')){
-      buttons.push({ label: `Enter ${txOther.toUpperCase()} REFERENCE`, kind:'primary', action: ()=> { jumpToWizard(txOther,'reference'); } });
+      buttons.push({ label: `Enter ${txOther.toUpperCase()} REFERENCE`, kind:'primary', action: ()=> { state.current.tx = txOther; state.current.type = 'reference'; state.current.idx = 0; saveState(); showWizardForCurrent(); showPage('page-wizard'); } });
     } else {
       buttons.push({ label: `View Results`, kind:'primary', action: ()=> { showPage('page-results'); } });
     }
-    // always allow edits and present jumps
-    buttons.push({ label: `Enter ${afterTx.toUpperCase()} REFERENCE (edit)`, kind:'secondary', action: ()=> { jumpToWizard(afterTx,'reference'); } });
-    buttons.push({ label: `Enter ${afterTx.toUpperCase()} PRESENT`, kind:'secondary', action: ()=> { jumpToWizard(afterTx,'present'); } });
-    buttons.push({ label: `Enter ${txOther.toUpperCase()} PRESENT`, kind:'secondary', action: ()=> { jumpToWizard(txOther,'present'); } });
+    // flexible choices
+    buttons.push({ label: `Edit ${afterTx.toUpperCase()} REFERENCE`, kind:'secondary', action: ()=> { state.current.tx = afterTx; state.current.type = 'reference'; state.current.idx = 0; saveState(); showWizardForCurrent(); showPage('page-wizard'); } });
+    buttons.push({ label: `Enter ${afterTx.toUpperCase()} PRESENT`, kind:'secondary', action: ()=> { state.current.tx = afterTx; state.current.type = 'present'; state.current.idx = 0; saveState(); showWizardForCurrent(); showPage('page-wizard'); } });
+    buttons.push({ label: `Enter ${txOther.toUpperCase()} PRESENT`, kind:'secondary', action: ()=> { state.current.tx = txOther; state.current.type = 'present'; state.current.idx = 0; saveState(); showWizardForCurrent(); showPage('page-wizard'); } });
   }
 
   showBottomSheet(title, subtitle, buttons);
 }
 
+// jump helper (used by some buttons)
 function jumpToWizard(tx, type){
-  // set current state and open wizard
   state.current.tx = tx;
   state.current.type = type;
   state.current.idx = 0;
-  // set UI tab buttons on page-tx if visible
-  document.querySelectorAll('.tabbtn').forEach(b => b.classList.toggle('active', b.dataset.tx === tx));
-  document.querySelectorAll('.subtabbtn').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+  saveState();
   showWizardForCurrent();
   showPage('page-wizard');
 }
 
-// ---------- Event wiring ----------
-document.addEventListener('DOMContentLoaded', ()=>{
-  // populate meta fields from saved state
-  $('station').value = state.meta.station || '';
-  $('freq').value = state.meta.freq || '';
-  $('make').value = state.meta.make || '';
-  $('model').value = state.meta.model || '';
-  $('refDate').value = state.meta.refDate || '';
-  $('presDate').value = state.meta.presDate || '';
-  $('course').value = state.meta.course || '';
-
-  // Home button
-  $('btnHome').addEventListener('click', ()=> showPage('page-meta'));
-
-  // go to field readings
-  $('toField').addEventListener('click', ()=>{
-    if(!applyHeaderCheck()) return;
-    populateMetaFromUI();
-    showPage('page-tx');
-    refreshTxTabs();
-  });
-
-  // clear saved
-  $('clearAll').addEventListener('click', ()=>{
-    if(confirm('Clear all saved local entries?')){
-      clearSaved();
-      location.reload();
-    }
-  });
-
-  // tab switching
-  document.querySelectorAll('.tabbtn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      state.current.tx = btn.dataset.tx;
-      refreshTxTabs();
-    });
-  });
-  document.querySelectorAll('.subtabbtn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.subtabbtn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      state.current.type = btn.dataset.type;
-    });
-  });
-
-  // start wizard
-  $('startWizard').addEventListener('click', ()=>{
-    if(!applyHeaderCheck()) return;
-    populateMetaFromUI();
-    state.current.direction = $('angleDirection').value;
-    state.current.idx = 0;
-    showWizardForCurrent();
-    showPage('page-wizard');
-  });
-
-  // wizard nav buttons
-  $('prevAngle').addEventListener('click', ()=>{ wizardSaveCurrent(); wizardPrev(); });
-  $('nextAngle').addEventListener('click', ()=>{ wizardSaveCurrent(); wizardNext(); });
-  $('saveAngle').addEventListener('click', ()=>{ wizardSaveCurrent(); alert('Saved'); });
-
-  // finish wizard - changed behavior: show bottom sheet with recommended next steps
-  $('finishWizard').addEventListener('click', ()=>{
-    if(!wizardSaveCurrent()) return;
-    // after save, show bottom sheet with recommended options
-    const tx = state.current.tx, type = state.current.type;
-    showNextStepModal(tx, type);
-  });
-
-  // results actions
-  $('showTables').addEventListener('click', ()=>{ buildAllTables(); $('tablesArea').classList.toggle('hidden'); });
-  $('calcAll').addEventListener('click', ()=>{ calculateAll(); $('plotsArea').classList.remove('hidden'); $('resultsSummary').classList.remove('hidden'); buildAllTables(); });
-  $('exportCsvBtn').addEventListener('click', exportCsv);
-  $('exportPdfBtn').addEventListener('click', exportPdf);
-  $('exportImgsBtn').addEventListener('click', exportAllChartsAsImages);
-  $('toResults').addEventListener('click', ()=>{ saveState(); showPage('page-results'); });
-
-  showPage('page-meta');
-});
-
-// ---------- Table & chart functions kept (same as before) ----------
+// ---------- Export / table / chart logic (kept as before) ----------
+let charts = {};
 function buildTableFor(tx, type){
   const containerId = `tbl_${tx}_${type}`;
   const elc = $(containerId);
@@ -384,8 +369,6 @@ function buildAllTables(){
   buildTableFor('tx2','present'); buildTableFor('tx2','reference');
 }
 
-// charts, calculations and exports are unchanged from previous implementation
-let charts = {};
 function calculateAll(){
   const compiled = {};
   ['tx1','tx2'].forEach(tx=>{
@@ -456,6 +439,7 @@ function plotAllCharts(compiled){
   plotCanvas('chart_tx2_ddm', state.compiled.tx2.reference.ddm, state.compiled.tx2.present.ddm, state.compiled.tx2.ddm_diff, 'DDM');
   plotCanvas('chart_tx2_sdm', state.compiled.tx2.reference.sdm, state.compiled.tx2.present.sdm, state.compiled.tx2.sdm_diff, 'SDM');
   plotCanvas('chart_tx2_rf',  state.compiled.tx2.reference.rf, state.compiled.tx2.present.rf, state.compiled.tx2.rf_diff, 'RF');
+
   function plotCombined(id, refArr, presArr, label){
     const c = document.getElementById(id);
     if(!c) return;
@@ -490,7 +474,7 @@ function renderSummary(compiled){
   $('resultsSummary').textContent = out.join('\n');
 }
 
-// Export CSV / PDF / Images (same logic as before)
+// exports (CSV / PDF / images) same as before
 function exportCsv(){
   if(!state.compiled) calculateAll();
   const meta = state.meta;
@@ -521,6 +505,7 @@ function exportCsv(){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = 'llz_export.csv'; a.click(); URL.revokeObjectURL(url);
 }
+
 async function exportPdf(){
   if(!state.compiled) calculateAll();
   const printDiv = el('div');
@@ -555,6 +540,7 @@ async function exportPdf(){
   }catch(e){ alert('PDF generation failed: '+e); }
   finally{ document.body.removeChild(printDiv); }
 }
+
 function exportAllChartsAsImages(){
   const canvasIds = ['chart_tx1_ddm','chart_tx1_sdm','chart_tx1_rf','chart_tx2_ddm','chart_tx2_sdm','chart_tx2_rf','chart_tx1_comb','chart_tx2_comb'];
   canvasIds.forEach(id=>{
@@ -566,15 +552,17 @@ function exportAllChartsAsImages(){
   });
 }
 
-// refresh tab visuals
+// refresh tabs visuals
 function refreshTxTabs(){
   document.querySelectorAll('.tabbtn').forEach(b => b.classList.toggle('active', b.dataset.tx === state.current.tx));
   document.querySelectorAll('.subtabbtn').forEach(b => b.classList.toggle('active', b.dataset.type === state.current.type));
-  $('angleDirection').value = state.current.direction || 'neg2pos';
+  if($('angleDirection')) $('angleDirection').value = state.current.direction || 'neg2pos';
 }
 
-// initial load: set UI values
+// init and wire events
 document.addEventListener('DOMContentLoaded', ()=>{
+
+  // populate meta
   $('station').value = state.meta.station || '';
   $('freq').value = state.meta.freq || '';
   $('make').value = state.meta.make || '';
@@ -583,25 +571,65 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('presDate').value = state.meta.presDate || '';
   $('course').value = state.meta.course || '';
 
+  // wire top buttons
   $('btnHome').addEventListener('click', ()=> showPage('page-meta'));
-  $('toField').addEventListener('click', ()=>{
-    if(!applyHeaderCheck()) return;
-    populateMetaFromUI();
-    showPage('page-tx');
-    refreshTxTabs();
-  });
+  $('toField').addEventListener('click', ()=>{ if(!applyHeaderCheck()) return; populateMetaFromUI(); showPage('page-tx'); refreshTxTabs(); });
+
+  // clear
   $('clearAll').addEventListener('click', ()=>{ if(confirm('Clear all saved local entries?')){ clearSaved(); location.reload(); } });
+
+  // tx tab buttons
   document.querySelectorAll('.tabbtn').forEach(btn=> btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); state.current.tx = btn.dataset.tx; refreshTxTabs();
+    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+    state.current.tx = btn.dataset.tx; refreshTxTabs();
   }));
+  // subtabs
   document.querySelectorAll('.subtabbtn').forEach(btn=> btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.subtabbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); state.current.type = btn.dataset.type;
+    document.querySelectorAll('.subtabbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+    state.current.type = btn.dataset.type;
   }));
-  $('startWizard').addEventListener('click', ()=>{ if(!applyHeaderCheck()) return; populateMetaFromUI(); state.current.direction = $('angleDirection').value; state.current.idx = 0; showWizardForCurrent(); showPage('page-wizard'); });
+
+  // angle direction select (user can override but switching TX may auto-change)
+  if($('angleDirection')) {
+    $('angleDirection').value = state.current.direction || 'neg2pos';
+    $('angleDirection').addEventListener('change', ()=> {
+      state.current.direction = $('angleDirection').value || 'neg2pos'; saveState();
+    });
+  }
+
+  // start wizard
+  $('startWizard').addEventListener('click', ()=>{ if(!applyHeaderCheck()) return; populateMetaFromUI(); state.current.direction = $('angleDirection').value || 'neg2pos'; state.current.idx = 0; showWizardForCurrent(); showPage('page-wizard'); });
+
+  // wizard nav
   $('prevAngle').addEventListener('click', ()=>{ wizardSaveCurrent(); wizardPrev(); });
   $('nextAngle').addEventListener('click', ()=>{ wizardSaveCurrent(); wizardNext(); });
-  $('saveAngle').addEventListener('click', ()=>{ wizardSaveCurrent(); alert('Saved'); });
+  $('saveAngle').addEventListener('click', ()=>{ wizardSaveCurrent(); showToast('Saved'); });
+
+  // finish button uses next-step modal
   $('finishWizard').addEventListener('click', ()=>{ if(!wizardSaveCurrent()) return; const tx=state.current.tx, type=state.current.type; showNextStepModal(tx,type); });
+
+  // NEXT small buttons: wire them here (they exist in DOM)
+  if($('ddmNext')) $('ddmNext').addEventListener('click', ()=>{ $('sdmInput').focus(); });
+  if($('sdmNext')) $('sdmNext').addEventListener('click', ()=>{ $('rfInput').focus(); });
+  if($('rfNext')) $('rfNext').addEventListener('click', ()=>{ wizardSaveCurrent(); wizardNext(); });
+
+  // input event listeners to show next buttons
+  ['ddmInput','sdmInput','rfInput'].forEach(id=>{
+    const elIn = $(id);
+    if(!elIn) return;
+    elIn.addEventListener('input', updateNextButtonsVisibility);
+    elIn.addEventListener('keydown', (ev)=> {
+      // If user presses Enter on mobile keyboard, advance
+      if(ev.key === 'Enter'){
+        ev.preventDefault();
+        if(id === 'ddmInput') { $('sdmInput').focus(); }
+        else if(id === 'sdmInput') { $('rfInput').focus(); }
+        else if(id === 'rfInput') { wizardSaveCurrent(); wizardNext(); }
+      }
+    });
+  });
+
+  // results action wiring
   $('showTables').addEventListener('click', ()=>{ buildAllTables(); $('tablesArea').classList.toggle('hidden'); });
   $('calcAll').addEventListener('click', ()=>{ calculateAll(); $('plotsArea').classList.remove('hidden'); $('resultsSummary').classList.remove('hidden'); buildAllTables(); });
   $('exportCsvBtn').addEventListener('click', exportCsv);
@@ -609,5 +637,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('exportImgsBtn').addEventListener('click', exportAllChartsAsImages);
   $('toResults').addEventListener('click', ()=>{ saveState(); showPage('page-results'); });
 
+  // ensure UI shows meta/default page
   showPage('page-meta');
+
 });

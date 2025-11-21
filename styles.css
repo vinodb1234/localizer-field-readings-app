@@ -2,6 +2,7 @@
   --bg:#f7f8fb; --card:#fff; --accent:#0b74de; --muted:#666;
   --success:#198754; --danger:#dc3545; --sheet-bg:#ffffff;
   --sheet-shadow: rgba(0,0,0,0.28);
+  --input-next:#0b74de;
 }
 *{box-sizing:border-box}
 body{font-family:system-ui,Arial,sans-serif;margin:0;background:var(--bg);color:#222}
@@ -9,24 +10,27 @@ body{font-family:system-ui,Arial,sans-serif;margin:0;background:var(--bg);color:
 .topbar-row{display:flex;align-items:center;justify-content:space-between}
 .title{font-size:18px;font-weight:600}
 .container{padding:12px;max-width:1100px;margin:0 auto}
-.card{background:var(--card);padding:10px;margin-bottom:12px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,0.06)}
-.row{display:flex;gap:8px;flex-wrap:wrap}
+.card{background:var(--card);padding:10px;margin-bottom:12px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,0.06)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
 .row label{display:flex;flex-direction:column;font-size:13px;min-width:130px}
-.row input, select{padding:8px;border:1px solid #ddd;border-radius:6px}
-.actions{margin-top:8px}
-.btn{padding:8px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer;font-weight:600}
+.row input, select{padding:10px;border:1px solid #ddd;border-radius:8px}
+.actions{margin-top:10px}
+.btn{padding:10px 12px;border-radius:10px;border:1px solid #ccc;background:#fff;cursor:pointer;font-weight:700}
 .btn.small{padding:6px 8px;font-size:13px}
 .btn.primary{background:var(--accent);color:#fff;border:none}
 .btn.danger{background:var(--danger);color:#fff;border:none}
-.tabbtn, .subtabbtn{padding:8px 10px;border-radius:6px;border:1px solid #ddd;background:#fafafa;cursor:pointer}
-.tabbtn.active, .subtabbtn.active{background:var(--accent);color:#fff;border:none}
+.tab-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.tab-left{display:flex;gap:8px}
+.tab-right{display:flex;gap:8px}
+.tabbtn, .subtabbtn{padding:10px 14px;border-radius:12px;border:1px solid #ddd;background:#fafafa;cursor:pointer;font-weight:700}
+.tabbtn.active, .subtabbtn.active{background:var(--accent);color:#fff;border:none;box-shadow:0 3px 10px rgba(11,116,222,0.12)}
 .note{font-size:13px;color:var(--muted);margin:8px 0}
 .hidden{display:none}
 .wizardBox{padding:8px}
-.angleIndicator{font-size:18px;font-weight:600;margin-bottom:8px}
-.entryRow{margin:8px 0}
-.signedInput{display:flex;align-items:center;gap:6px}
-.sign{font-weight:700;padding:6px 8px;background:#eee;border-radius:6px}
+.angleIndicator{font-size:20px;font-weight:700;margin-bottom:8px}
+.entryRow{margin:8px 0;display:flex;align-items:center;gap:8px}
+.signedInput{display:flex;align-items:center;gap:8px}
+.sign{font-weight:700;padding:8px 10px;background:#eee;border-radius:8px}
 .hint{font-size:12px;color:var(--muted)}
 .progress{margin-top:8px;font-size:13px;color:var(--muted)}
 .tablesArea .tableRow{display:flex;gap:8px;flex-wrap:wrap}
@@ -37,7 +41,7 @@ body{font-family:system-ui,Arial,sans-serif;margin:0;background:var(--bg);color:
 .table th,.table td{border:1px solid #eee;padding:6px;text-align:center;min-width:70px;font-size:13px}
 .plotRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .plotCard{flex:1;min-width:300px;padding:6px}
-.resultsSummary{padding:6px;margin-top:8px;border-top:1px dashed #ddd}
+.resultsSummary{padding:6px;margin-top:8px;border-top:1px dashed #ddd;white-space:pre-wrap}
 .footer{padding:10px;text-align:center;font-size:12px;color:#666}
 @media (max-width:700px){
   .row label{min-width:140px}
@@ -78,23 +82,72 @@ body{font-family:system-ui,Arial,sans-serif;margin:0;background:var(--bg);color:
   margin: 0 auto 8px;
 }
 
-/* Bottom sheet header and options */
 .sheet-title { font-weight:700; font-size:16px; margin-bottom:6px; text-align:center; }
 .sheet-sub { font-size:13px; color:var(--muted); margin-bottom:12px; text-align:center; }
 
-/* Buttons in sheet */
 .sheet-buttons { display:flex; flex-direction:column; gap:10px; padding:6px 4px; }
 .sheet-btn { padding:12px 14px; border-radius:10px; border:1px solid #ddd; font-weight:700; font-size:15px; text-align:center; background:#fff; cursor:pointer; }
 .sheet-btn.primary { background:var(--accent); color:#fff; border:none; box-shadow: 0 2px 6px rgba(11,116,222,0.12); }
 .sheet-btn.secondary { background:#f5f6f8; color:#333; }
 .sheet-btn.ghost { background:transparent; color:var(--muted); border:1px dashed #e6e6e6; }
 
-/* small actions row */
 .sheet-actions { display:flex; gap:8px; justify-content:center; margin-top:8px; }
 .sheet-actions .btn { padding:8px 10px; border-radius:8px; }
 
-/* responsive padding */
-@media (max-width:420px){
-  .bottom-sheet { padding:12px }
-  .sheet-btn { font-size:14px; padding:12px; }
+/* ===== Toast ===== */
+.toast {
+  position: fixed;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight:700;
+  display:none;
+  max-width:90%;
+  text-align:center;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
 }
+.toast.show { display:block; opacity:1; animation: fadeInOut 2400ms ease-in-out; }
+@keyframes fadeInOut {
+  0% { opacity:0; transform: translate(-50%,10px) scale(0.98); }
+  10% { opacity:1; transform: translate(-50%,0) scale(1); }
+  85% { opacity:1; transform: translate(-50%,0) scale(1); }
+  100% { opacity:0; transform: translate(-50%,-8px) scale(0.98); }
+}
+
+/* ===== small rounded NEXT buttons next to inputs (mobile-friendly) ===== */
+.input-next {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height:38px;
+  min-width:38px;
+  border-radius:10px;
+  background:var(--input-next);
+  color:#fff;
+  font-weight:800;
+  cursor:pointer;
+  border:none;
+  box-shadow:0 2px 8px rgba(11,116,222,0.18);
+}
+.input-next.hidden { display:none; opacity:0; transform:translateY(6px); transition:all 140ms; }
+.input-next.visible { display:inline-flex; opacity:1; transform:translateY(0); transition:all 140ms; }
+
+.input-next.small { height:34px; min-width:34px; border-radius:8px; font-size:16px; }
+
+/* Align inputs and next buttons nicely */
+.input-with-next {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+}
+.input-with-next input { flex:1; }
+
+/* Improved spacing for TX tabs on mobile */
+.tx-tabs { display:flex; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.present-tabs { display:flex; justify-content:flex-start; gap:10px; margin-bottom:10px; }
