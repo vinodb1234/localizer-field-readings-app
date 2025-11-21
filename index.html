@@ -187,8 +187,13 @@
         <div id="plotsArea" class="hidden" style="margin-top:12px">
           <h3>TX1 — Present & Reference (DDM, SDM, RF)</h3>
           <canvas id="chart_tx1_all" style="max-width:100%;height:300px"></canvas>
+
+          <div id="table_tx1_combined" class="tableCard" style="margin-top:12px"></div>
+
           <h3 style="margin-top:18px">TX2 — Present & Reference (DDM, SDM, RF)</h3>
           <canvas id="chart_tx2_all" style="max-width:100%;height:300px"></canvas>
+
+          <div id="table_tx2_combined" class="tableCard" style="margin-top:12px"></div>
         </div>
 
         <pre id="resultsSummary" class="resultsSummary hidden"></pre>
@@ -203,7 +208,7 @@
   </div>
 
   <script>
-    // Path to uploaded Excel file
+    // Path to uploaded Excel file (keep for later import)
     const UPLOADED_FILE_URL = "/mnt/data/LLZ Field Reading.xls";
   </script>
 
