@@ -113,13 +113,17 @@
           Angle: <span id="angleValue"></span>°
         </div>
 
-        <!-- DDM row -->
+        <!-- DDM row with sign radios for 0° -->
         <div class="entryRow">
           <div class="labelCol"><strong>DDM</strong></div>
           <div class="inputCol">
             <div class="input-with-next">
               <input id="ddmInput" placeholder="DDM value" inputmode="decimal" autocomplete="off">
               <button id="ddmNext" class="input-next small hidden">⏎</button>
+            </div>
+            <div id="ddmSignGroup" style="margin-top:6px; display:none;">
+              <label style="margin-right:8px"><input type="radio" name="ddmSign" id="ddmPlus" value="+"> +</label>
+              <label><input type="radio" name="ddmSign" id="ddmMinus" value="-"> −</label>
             </div>
           </div>
         </div>
@@ -143,6 +147,7 @@
               <input id="rfInput" placeholder="RF value" inputmode="numeric" autocomplete="off">
               <button id="rfNext" class="input-next small hidden">➡</button>
             </div>
+            <div class="hint" style="margin-top:6px">Enter positive number; RF stored as negative</div>
           </div>
         </div>
 
@@ -188,11 +193,11 @@
     </div>
   </div>
 
-  <!-- libs + app -->
   <script>
-    // Path to uploaded Excel file (keeps the original uploaded path for later processing)
+    // Path to uploaded Excel file (server path preserved for later processing)
     const UPLOADED_FILE_URL = "/mnt/data/LLZ Field Reading.xls";
   </script>
+
   <script src="app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
