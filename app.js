@@ -1,7 +1,8 @@
-/* app.js - final: combined horizontal tables and PDF export including graphs + combined tables.
-   - Uses UPLOADED_FILE_URL for future import: "/mnt/data/LLZ Field Reading.xls"
-   - Charts show all angle labels (autoSkip: false, rotated)
-   - PDF export (Option 1): Basic details, TX1 Graph, TX1 Combined Table, TX2 Graph, TX2 Combined Table
+/* app.js - final v6
+   - PDF export in landscape A4 and auto-scales table images to page width
+   - Exports graph images (PNG) for TX1 and TX2
+   - Combined horizontal tables per TX (angles as columns)
+   - Graphs show all angle ticks and use absolute magnitudes for plotting
 */
 
 const ANGLES = [
@@ -10,7 +11,7 @@ const ANGLES = [
   0,0.5,1,1.5,2,2.5,3,4,5,6,7,8,9,10,11,12,13,14,20,25,30,35
 ];
 
-const STORAGE_KEY = 'llz_final_v5';
+const STORAGE_KEY = 'llz_final_v6';
 
 let state = {
   meta: { station:'', freq:'', make:'', model:'', refDate:'', presDate:'', course:'' },
@@ -223,7 +224,7 @@ function finishTxAndBack(){
         `All readings completed`,
         `All Present and Reference readings for both TXs completed.`,
         [
-          { label: 'View Results', kind:'primary', action: ()=> { populateResultsMeta(); buildAllTables(); showPage('page-results'); } },
+          { label: 'View Results', kind:'primary', action: ()=> { populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); } },
           { label: 'Back to Dashboard', kind:'secondary', action: ()=> { showPage('page-stage'); updateDashboardButtons(); } }
         ]
       );
@@ -235,7 +236,7 @@ function finishTxAndBack(){
       [
         { label: `Start ${otherStage.toUpperCase()}`, kind:'primary', action: ()=> { startStage(otherStage); } },
         { label: 'Stay here', kind:'secondary', action: ()=> { showPage('page-txselect'); } },
-        { label: 'View Results', kind:'ghost', action: ()=> { populateResultsMeta(); buildAllTables(); showPage('page-results'); } }
+        { label: 'View Results', kind:'ghost', action: ()=> { populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); } }
       ]
     );
   } else {
@@ -245,7 +246,7 @@ function finishTxAndBack(){
       [
         { label: `Enter other TX (${ finishedTx === 'tx1' ? 'TX2' : 'TX1' })`, kind:'primary', action: ()=> { startStage(stage); } },
         { label: `Redo ${finishedTx.toUpperCase()}`, kind:'secondary', action: ()=> { state.current.tx = finishedTx; showPage('page-direction'); } },
-        { label: 'View Results', kind:'ghost', action: ()=> { populateResultsMeta(); buildAllTables(); showPage('page-results'); } }
+        { label: 'View Results', kind:'ghost', action: ()=> { populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); } }
       ]
     );
   }
@@ -269,7 +270,6 @@ function populateResultsMeta(){
 
 // Build combined horizontal table for a transmitter (A-style order)
 function buildCombinedTable(tx){
-  const container = $(`table_${tx}_combined`) || $( `table_${tx}_combined` );
   const targetId = tx === 'tx1' ? 'table_tx1_combined' : 'table_tx2_combined';
   const wrapper = $(targetId);
   if(!wrapper) return;
@@ -299,13 +299,6 @@ function buildCombinedTable(tx){
   const presArr = state.values[tx].present.map(o => o);
 
   // rows in requested order:
-  // 1 DDM REF (% or units)
-  // 2 DDM PRESENT
-  // 3 SDM REF
-  // 4 SDM PRESENT
-  // 5 RF REF
-  // 6 RF PRESENT
-
   const tbody = el('tbody');
   const ddmRef = refArr.map(x => x.DDM === null ? '' : x.DDM);
   const ddmPres = presArr.map(x => x.DDM === null ? '' : x.DDM);
@@ -458,7 +451,7 @@ function renderSummary(compiled){
   $('resultsSummary').classList.remove('hidden');
 }
 
-// CSV (same as before)
+// CSV (same)
 function exportCsv(){
   const m = state.meta;
   const rows = [];
@@ -477,26 +470,25 @@ function exportCsv(){
   const a = document.createElement('a'); a.href = url; a.download = 'llz_export.csv'; a.click(); URL.revokeObjectURL(url);
 }
 
-// PDF export: include graphs then their combined tables (Option 1)
+// PDF export: landscape A4 with auto-scale of table images
 async function exportPdf(){
   if(!state.compiled) calculateAll();
-  // ensure charts are rendered
-  await new Promise(r => setTimeout(r, 200));
+  // ensure charts & tables are ready
+  await new Promise(r => setTimeout(r, 300));
 
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF('p','pt','a4');
+  const pdf = new jsPDF('l','pt','a4'); // landscape
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 28;
 
-  // Add header
   pdf.setFontSize(12);
   const header = `Station: ${state.meta.station||''}   Freq: ${state.meta.freq||''} MHz   REF: ${state.meta.refDate||''}   PRES: ${state.meta.presDate||''}   Make: ${state.meta.make||''}   Model: ${state.meta.model||''}`;
   pdf.text(header, margin, 40);
 
   let cursorY = 60;
 
-  // Helper: draw canvas to PDF at cursorY, returns new cursorY
+  // draw canvas -> pdf
   const addCanvasImage = (canvas, maxW, yPos) => {
     const dataUrl = canvas.toDataURL('image/png');
     const img = new Image();
@@ -505,11 +497,9 @@ async function exportPdf(){
       img.onload = ()=>{
         const imgW = img.width;
         const imgH = img.height;
-        // scale to fit width (maxW)
         const scale = Math.min(1, maxW / imgW);
         const drawW = imgW * scale;
         const drawH = imgH * scale;
-        // page break if needed
         if(yPos + drawH + 60 > pageH){
           pdf.addPage();
           yPos = margin;
@@ -521,7 +511,7 @@ async function exportPdf(){
     });
   };
 
-  // Helper: capture an element (table wrapper) to image via html2canvas and add to PDF
+  // element -> image via html2canvas -> pdf (auto-scale)
   const addElementImage = (elNode, maxW, yPos) => {
     return html2canvas(elNode, { scale: 1.25 }).then(canvas =>{
       const dataUrl = canvas.toDataURL('image/png');
@@ -548,7 +538,7 @@ async function exportPdf(){
 
   const maxImgWidth = pageW - margin*2;
 
-  // TX1: add chart then combined table
+  // TX1: chart then table
   const c1 = document.getElementById('chart_tx1_all');
   if(c1){
     cursorY = await addCanvasImage(c1, maxImgWidth, cursorY);
@@ -558,7 +548,7 @@ async function exportPdf(){
     cursorY = await addElementImage(table1, maxImgWidth, cursorY);
   }
 
-  // TX2: add chart then combined table
+  // TX2: chart then table
   const c2 = document.getElementById('chart_tx2_all');
   if(c2){
     cursorY = await addCanvasImage(c2, maxImgWidth, cursorY);
@@ -568,8 +558,25 @@ async function exportPdf(){
     cursorY = await addElementImage(table2, maxImgWidth, cursorY);
   }
 
-  // finalize
-  pdf.save('llz_report_graphs_tables.pdf');
+  pdf.save('llz_report_graphs_tables_landscape.pdf');
+}
+
+// Export graph images (PNG) for tx1 and tx2
+function exportGraphImages(){
+  const c1 = document.getElementById('chart_tx1_all');
+  const c2 = document.getElementById('chart_tx2_all');
+  const downloadImage = (dataUrl, filename) => {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    a.click();
+  };
+  if(c1){
+    try{ downloadImage(c1.toDataURL('image/png'), 'tx1_graph.png'); }catch(e){ showToast('TX1 export failed'); }
+  }
+  if(c2){
+    try{ downloadImage(c2.toDataURL('image/png'), 'tx2_graph.png'); }catch(e){ showToast('TX2 export failed'); }
+  }
 }
 
 // wiring
@@ -601,7 +608,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // clear saved
   $('clearAll').addEventListener('click', ()=>{ if(confirm('Clear all saved local entries?')){ localStorage.removeItem(STORAGE_KEY); location.reload(); } });
 
-  // stage dashboard handlers
+  // stage
   $('choosePresent').addEventListener('click', ()=>{ if(!applyHeaderCheck()) return; populateMetaFromUI(); startStage('present'); });
   $('chooseReference').addEventListener('click', ()=>{ if(!applyHeaderCheck()) return; populateMetaFromUI(); startStage('reference'); });
   $('chooseResults').addEventListener('click', ()=>{ populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); });
@@ -644,7 +651,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('calcAll').addEventListener('click', ()=> { calculateAll(); $('plotsArea').classList.remove('hidden'); });
   $('exportCsvBtn').addEventListener('click', exportCsv);
   $('exportPdfBtn').addEventListener('click', exportPdf);
-  $('exportImgsBtn').addEventListener('click', ()=> exportPdf());
+  $('exportImgsBtn').addEventListener('click', exportGraphImages);
 
   // init UI
   updateTxCardStatus();
