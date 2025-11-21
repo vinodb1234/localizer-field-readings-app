@@ -29,10 +29,11 @@ body{font-family:system-ui, Arial, sans-serif;margin:0;background:var(--bg);colo
 
 /* TX card styles */
 .tx-card-row{display:flex;gap:12px;justify-content:space-between}
-.tx-card{flex:1;min-width:140px;background:#fff;border-radius:12px;padding:16px;border:1px solid #e6e6e6;box-shadow:0 2px 12px rgba(0,0,0,0.04);text-align:center;cursor:pointer}
+.tx-card{flex:1;min-width:140px;background:#fff;border-radius:12px;padding:16px;border:1px solid #e6e6e6;box-shadow:0 2px 12px rgba(0,0,0,0.04);text-align:center;cursor:pointer;display:flex;flex-direction:column;justify-content:center}
 .tx-card:hover{box-shadow:0 6px 20px rgba(0,0,0,0.08)}
 .tx-card-title{font-weight:900;font-size:20px}
 .tx-card-sub{font-size:13px;color:var(--muted);margin-top:6px}
+.tx-card-foot{font-size:12px;color:var(--muted);margin-top:8px}
 
 /* Direction page */
 #page-direction .card{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
@@ -44,15 +45,16 @@ body{font-family:system-ui, Arial, sans-serif;margin:0;background:var(--bg);colo
 
 /* Input-with-next and next button */
 .input-with-next{display:flex;align-items:center;gap:8px}
-.input-with-next input{flex:1;padding:10px;border-radius:8px;border:1px solid #ddd}
+.input-with-next input{flex:1;padding:10px;border-radius:8px;border:1px solid #ddd; max-width:220px}
 .input-next{display:inline-flex;align-items:center;justify-content:center;height:38px;min-width:38px;border-radius:10px;background:var(--input-next);color:#fff;font-weight:800;border:none;cursor:pointer}
 .input-next.hidden{display:none;opacity:0}
 
-/* tables & plots minimal */
+/* reduce column width and add space between columns */
 .tableCard{margin-top:10px;padding:8px;background:#fff;border-radius:8px;border:1px solid #eee}
-.canvas{width:100%;height:220px}
+.tableCard table{width:100%;border-collapse:collapse}
+.tableCard th, .tableCard td{border:1px solid #eee;padding:6px;text-align:center}
 
-/* bottom sheet & toast (same as earlier) */
+/* bottom sheet & toast */
 .bs-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index:1000; display:none; align-items:flex-end; }
 .bs-overlay.show { display:flex; }
 .bottom-sheet{ width:100%; max-width:640px; margin:0 auto; background:var(--sheet-bg); border-top-left-radius:16px;border-top-right-radius:16px; padding:14px; transform:translateY(100%); transition:transform 280ms; z-index:1001; }
@@ -73,4 +75,5 @@ body{font-family:system-ui, Arial, sans-serif;margin:0;background:var(--bg);colo
   .tx-card-row{flex-direction:column}
   .labelCol{width:70px}
   .row label{min-width:120px}
+  .input-with-next input{max-width:180px}
 }
