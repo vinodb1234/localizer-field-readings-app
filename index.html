@@ -1,194 +1,190 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>LLZ Field Reader</title>
-
-  <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="styles.css" />
-
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- jsPDF and html2canvas for PDF export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Localizer Field Readings</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-row">
-      <div class="title">LLZ Field Reader</div>
-      <button id="btnHome" class="btn small">Home</button>
+
+<div class="topbar">
+  <div class="topbar-row">
+    <div class="title">Localizer Field Readings</div>
+    <button id="btnHome" class="btn small">Home</button>
+  </div>
+</div>
+
+<!-- PAGE: META -->
+<div id="page-meta" class="page">
+  <div class="container">
+
+    <div class="card">
+      <h2>Enter Basic Details</h2>
+      <div class="row">
+        <label>Station Code <input id="station" placeholder="VOBM"></label>
+        <label>Frequency (MHz) <input id="freq" placeholder="110.5"></label>
+        <label>Make <input id="make"></label>
+        <label>Model <input id="model"></label>
+        <label>Ref Date (DD-MM-YYYY) <input id="refDate"></label>
+        <label>Pres Date (DD-MM-YYYY) <input id="presDate"></label>
+        <label>Course Width (°) <input id="course"></label>
+      </div>
+      <div class="actions">
+        <button id="clearAll" class="btn danger">Clear Saved Data</button>
+      </div>
     </div>
-  </header>
 
-  <main id="app" class="container">
-    <!-- Page: Metadata -->
-    <section id="page-meta" class="card page">
-      <h2>1. Station & Dates</h2>
+    <button id="toField" class="btn primary">Let us go for Field Readings</button>
+  </div>
+</div>
+
+<!-- PAGE: TX selection -->
+<div id="page-tx" class="page hidden">
+  <div class="container">
+
+    <h2>Select Transmitter & Type</h2>
+
+    <div class="tx-tabs">
+      <button class="tabbtn" data-tx="tx1">TX1</button>
+      <button class="tabbtn" data-tx="tx2">TX2</button>
+    </div>
+
+    <div class="present-tabs">
+      <button class="subtabbtn" data-type="present">Present</button>
+      <button class="subtabbtn" data-type="reference">Reference</button>
+    </div>
+
+    <div class="card">
+      <label>Angle Direction
+        <select id="angleDirection">
+          <option value="neg2pos">-35 → +35</option>
+          <option value="pos2neg">+35 → -35</option>
+        </select>
+      </label>
+    </div>
+
+    <button id="startWizard" class="btn primary">Start entering angles</button>
+  </div>
+</div>
+
+<!-- PAGE: WIZARD -->
+<div id="page-wizard" class="page hidden">
+  <div class="container">
+
+    <div class="card wizardBox">
+
+      <h2 id="wizardTitle">Wizard</h2>
+      <div id="wizardMeta" class="note"></div>
+
+      <div class="angleIndicator">
+        Angle: <span id="angleValue"></span>°
+      </div>
+
+      <!-- INPUT ROWS WITH NEXT BUTTONS -->
+      <div class="entryRow">
+        <span class="sign" id="ddmSign">+</span>
+        <div class="input-with-next">
+          <input id="ddmInput" placeholder="DDM">
+          <button id="ddmNext" class="input-next small hidden">⏎</button>
+        </div>
+      </div>
+
+      <div class="entryRow">
+        <div class="input-with-next">
+          <input id="sdmInput" placeholder="SDM">
+          <button id="sdmNext" class="input-next small hidden">⏎</button>
+        </div>
+      </div>
+
+      <div class="entryRow">
+        <div class="input-with-next">
+          <input id="rfInput" placeholder="RF">
+          <button id="rfNext" class="input-next small hidden">➡</button>
+        </div>
+      </div>
+
+      <div class="progress" id="wizardProgress"></div>
+
+      <div class="actions">
+        <button id="prevAngle" class="btn small">Previous</button>
+        <button id="nextAngle" class="btn small">Next</button>
+        <button id="saveAngle" class="btn small">Save</button>
+        <button id="finishWizard" class="btn primary">Finish & Next</button>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- PAGE: RESULTS -->
+<div id="page-results" class="page hidden">
+  <div class="container">
+
+    <h2>Results & Graphs</h2>
+
+    <button id="showTables" class="btn small">Show tables</button>
+    <button id="calcAll" class="btn small">Compute & Show Graphs</button>
+
+    <div id="tablesArea" class="hidden tablesArea">
       <div class="row">
-        <label>Station Code<input id="station" placeholder="VOBM"></label>
-        <label>Frequency (MHz)<input id="freq" placeholder="110.300"></label>
-        <label>Make<input id="make" placeholder="THALES"></label>
-        <label>Model<input id="model" placeholder="LLZ-430"></label>
-      </div>
-
-      <div class="row">
-        <label>REF Date (DD-MM-YYYY)<input id="refDate" placeholder="DD-MM-YYYY"></label>
-        <label>PRES Date (DD-MM-YYYY)<input id="presDate" placeholder="DD-MM-YYYY"></label>
-        <label>Course Width (deg)<input id="course" placeholder="5.0"></label>
-      </div>
-
-      <div class="row actions">
-        <button id="toField" class="btn primary">Let us go for field readings →</button>
-        <button id="clearAll" class="btn">Clear saved data</button>
-      </div>
-    </section>
-
-    <!-- Page: TX selection / tabs -->
-    <section id="page-tx" class="card page hidden">
-      <h2>2. Choose Transmitter (TX)</h2>
-      <div class="tabs">
-        <button class="tabbtn active" data-tx="tx1">TX1</button>
-        <button class="tabbtn" data-tx="tx2">TX2</button>
-      </div>
-
-      <div class="subtabs" id="subtabs">
-        <button class="subtabbtn active" data-type="present">PRESENT</button>
-        <button class="subtabbtn" data-type="reference">REFERENCE</button>
-      </div>
-
-      <div class="note">Select TX and whether you are entering PRESENT or REFERENCE values. Then choose angle direction and Start.</div>
-
-      <div class="row actions">
-        <label>Angle order:
-          <select id="angleDirection">
-            <option value="neg2pos">-35 → ... → 0 → ... → +35</option>
-            <option value="pos2neg">+35 → ... → 0 → ... → -35</option>
-          </select>
-        </label>
-        <button id="startWizard" class="btn primary">Start entering angles</button>
-        <button id="toResults" class="btn">Go to Results & Graphs</button>
-      </div>
-    </section>
-
-    <!-- Page: Angle Wizard -->
-    <section id="page-wizard" class="card page hidden">
-      <h2 id="wizardTitle">Angle entry</h2>
-      <div id="wizardMeta" class="meta"></div>
-
-      <div class="wizardBox">
-        <div class="angleIndicator">Angle: <span id="angleValue"></span>°</div>
-
-        <div class="entryRow">
-          <label>DDM
-            <div class="signedInput">
-              <span id="ddmSign" class="sign">-</span>
-              <input id="ddmInput" inputmode="decimal" placeholder="e.g. 0.12" />
-            </div>
-            <small class="hint">Enter positive value only. Sign displayed automatically.</small>
-          </label>
+        <div class="tableCard">
+          <h4>TX1 Present</h4>
+          <div id="tbl_tx1_present"></div>
         </div>
-
-        <div class="entryRow">
-          <label>SDM
-            <div class="signedInput">
-              <input id="sdmInput" inputmode="decimal" placeholder="e.g. 0.345" />
-            </div>
-            <small class="hint">SDM positive only.</small>
-          </label>
+        <div class="tableCard">
+          <h4>TX1 Reference</h4>
+          <div id="tbl_tx1_reference"></div>
         </div>
-
-        <div class="entryRow">
-          <label>RF (dB)
-            <div class="signedInput">
-              <span class="sign">-</span>
-              <input id="rfInput" inputmode="decimal" placeholder="e.g. 31.5" />
-            </div>
-            <small class="hint">RF values shown negative; enter positive numbers only.</small>
-          </label>
+        <div class="tableCard">
+          <h4>TX2 Present</h4>
+          <div id="tbl_tx2_present"></div>
         </div>
-
-        <div class="row actions">
-          <button id="prevAngle" class="btn">Previous</button>
-          <button id="saveAngle" class="btn primary">Save</button>
-          <button id="nextAngle" class="btn">Next</button>
-          <button id="finishWizard" class="btn">Finish & Go to Results</button>
-        </div>
-
-        <div class="progress" id="wizardProgress"></div>
-      </div>
-
-    </section>
-
-    <!-- Page: Results & Graphs -->
-    <section id="page-results" class="card page hidden">
-      <h2>Results & Graphs</h2>
-
-      <div class="row actions">
-        <button id="showTables" class="btn">Show Entered Tables</button>
-        <button id="calcAll" class="btn primary">Calculate & Plot</button>
-        <button id="exportCsvBtn" class="btn">Export CSV</button>
-        <button id="exportPdfBtn" class="btn">Save as PDF</button>
-        <button id="exportImgsBtn" class="btn">Save charts as images</button>
-      </div>
-
-      <div id="tablesArea" class="tablesArea hidden">
-        <h3>Entered values</h3>
-        <div class="tableRow">
-          <div class="tableCard">
-            <h4>TX1 - PRESENT</h4><div id="tbl_tx1_present"></div>
-          </div>
-          <div class="tableCard">
-            <h4>TX1 - REFERENCE</h4><div id="tbl_tx1_reference"></div>
-          </div>
-        </div>
-        <div class="tableRow">
-          <div class="tableCard">
-            <h4>TX2 - PRESENT</h4><div id="tbl_tx2_present"></div>
-          </div>
-          <div class="tableCard">
-            <h4>TX2 - REFERENCE</h4><div id="tbl_tx2_reference"></div>
-          </div>
+        <div class="tableCard">
+          <h4>TX2 Reference</h4>
+          <div id="tbl_tx2_reference"></div>
         </div>
       </div>
+    </div>
 
-      <div id="plotsArea" class="plotsArea hidden">
-        <h3>Plots</h3>
-        <div class="plotRow">
-          <div class="plotCard"><h4>TX1 - DDM (REF & PRES)</h4><canvas id="chart_tx1_ddm"></canvas></div>
-          <div class="plotCard"><h4>TX1 - SDM (REF & PRES)</h4><canvas id="chart_tx1_sdm"></canvas></div>
-          <div class="plotCard"><h4>TX1 - RF (REF & PRES)</h4><canvas id="chart_tx1_rf"></canvas></div>
-        </div>
-
-        <div class="plotRow">
-          <div class="plotCard"><h4>TX2 - DDM (REF & PRES)</h4><canvas id="chart_tx2_ddm"></canvas></div>
-          <div class="plotCard"><h4>TX2 - SDM (REF & PRES)</h4><canvas id="chart_tx2_sdm"></canvas></div>
-          <div class="plotCard"><h4>TX2 - RF (REF & PRES)</h4><canvas id="chart_tx2_rf"></canvas></div>
-        </div>
-
-        <div class="plotRow">
-          <div class="plotCard"><h4>TX1 - Present vs Reference (combined)</h4><canvas id="chart_tx1_comb"></canvas></div>
-          <div class="plotCard"><h4>TX2 - Present vs Reference (combined)</h4><canvas id="chart_tx2_comb"></canvas></div>
-        </div>
+    <div id="plotsArea" class="hidden">
+      <div class="plotRow">
+        <div class="plotCard"><canvas id="chart_tx1_ddm"></canvas></div>
+        <div class="plotCard"><canvas id="chart_tx1_sdm"></canvas></div>
+        <div class="plotCard"><canvas id="chart_tx1_rf"></canvas></div>
       </div>
 
-      <div id="resultsSummary" class="resultsSummary hidden"></div>
-    </section>
+      <div class="plotRow">
+        <div class="plotCard"><canvas id="chart_tx2_ddm"></canvas></div>
+        <div class="plotCard"><canvas id="chart_tx2_sdm"></canvas></div>
+        <div class="plotCard"><canvas id="chart_tx2_rf"></canvas></div>
+      </div>
 
-  </main>
+      <h3>Combined DDM</h3>
+      <div class="plotRow">
+        <div class="plotCard"><canvas id="chart_tx1_comb"></canvas></div>
+        <div class="plotCard"><canvas id="chart_tx2_comb"></canvas></div>
+      </div>
+    </div>
 
-  <footer class="footer">
-    LLZ Field Reader — PWA (Add to Home Screen)
-  </footer>
+    <pre id="resultsSummary" class="resultsSummary hidden"></pre>
 
-  <script src="app.js"></script>
+    <div style="margin-top:12px;">
+      <button id="exportCsvBtn" class="btn small">Export CSV</button>
+      <button id="exportPdfBtn" class="btn small">Export PDF</button>
+      <button id="exportImgsBtn" class="btn small">Export Graph Images</button>
+    </div>
 
-  <script>
-    // register service worker
-    if('serviceWorker' in navigator){
-      navigator.serviceWorker.register('service-worker.js').catch(e=>console.log('SW register failed',e));
-    }
-  </script>
+  </div>
+</div>
+
+<!-- bottom sheet & toast auto-created by JS -->
+<script src="app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 </body>
 </html>
