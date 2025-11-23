@@ -40,14 +40,13 @@
 
       <div style="height:16px"></div>
 
-      <!-- Full width NEXT at bottom -->
       <div style="position:sticky; bottom:12px; padding:10px; background:transparent">
         <button id="metaNext" class="btn primary" style="width:100%; padding:14px; font-size:16px">NEXT — Choose Readings</button>
       </div>
     </div>
   </div>
 
-  <!-- PAGE 2: STAGE DASHBOARD (PRESENT / REFERENCE / RESULTS) -->
+  <!-- PAGE 2: STAGE DASHBOARD -->
   <div id="page-stage" class="page hidden">
     <div class="container">
       <div class="card">
@@ -57,13 +56,12 @@
           <button id="chooseReference" class="stage-btn">Reference Readings</button>
           <button id="chooseResults" class="stage-btn" style="display:none" title="View Results & Graphs">Results & Graphs</button>
         </div>
-
         <div class="note" id="stageProgress"></div>
       </div>
     </div>
   </div>
 
-  <!-- PAGE 3: TX SELECTION (cards) -->
+  <!-- PAGE 3: TX SELECTION -->
   <div id="page-txselect" class="page hidden">
     <div class="container">
       <div class="card">
@@ -90,12 +88,8 @@
       <div class="card">
         <h2 id="dirHeader">Select Angle Direction</h2>
         <div class="row" style="align-items:center">
-          <label style="min-width:unset">
-            <input type="radio" name="angleDir" id="dirNeg2Pos" value="neg2pos"> -35 → +35
-          </label>
-          <label style="min-width:unset">
-            <input type="radio" name="angleDir" id="dirPos2Neg" value="pos2neg"> +35 → -35
-          </label>
+          <label style="min-width:unset"><input type="radio" name="angleDir" id="dirNeg2Pos" value="neg2pos"> -35 → +35</label>
+          <label style="min-width:unset"><input type="radio" name="angleDir" id="dirPos2Neg" value="pos2neg"> +35 → -35</label>
         </div>
         <div class="actions">
           <button id="dirContinue" class="btn primary">Continue</button>
@@ -111,12 +105,8 @@
       <div class="card wizardBox">
         <h2 id="wizardTitle">Wizard</h2>
         <div id="wizardMeta" class="note"></div>
+        <div class="angleIndicator">Angle: <span id="angleValue"></span>°</div>
 
-        <div class="angleIndicator">
-          Angle: <span id="angleValue"></span>°
-        </div>
-
-        <!-- DDM row: for non-zero angle show sign prefix, for 0° show radio (+ / -) -->
         <div class="entryRow">
           <div class="labelCol"><strong>DDM</strong></div>
           <div class="inputCol">
@@ -133,7 +123,6 @@
           </div>
         </div>
 
-        <!-- SDM row -->
         <div class="entryRow">
           <div class="labelCol"><strong>SDM</strong></div>
           <div class="inputCol">
@@ -145,7 +134,6 @@
           </div>
         </div>
 
-        <!-- RF row -->
         <div class="entryRow">
           <div class="labelCol"><strong>RF</strong></div>
           <div class="inputCol">
@@ -186,13 +174,11 @@
 
         <div id="plotsArea" class="hidden" style="margin-top:12px">
           <h3>TX1 — Present & Reference (DDM, SDM, RF)</h3>
-          <canvas id="chart_tx1_all" style="max-width:100%;height:320px"></canvas>
-
+          <div class="chartWrap"><canvas id="chart_tx1_all" style="width:100%;height:320px"></canvas></div>
           <div id="table_tx1_combined" class="tableCard" style="margin-top:12px"></div>
 
           <h3 style="margin-top:18px">TX2 — Present & Reference (DDM, SDM, RF)</h3>
-          <canvas id="chart_tx2_all" style="max-width:100%;height:320px"></canvas>
-
+          <div class="chartWrap"><canvas id="chart_tx2_all" style="width:100%;height:320px"></canvas></div>
           <div id="table_tx2_combined" class="tableCard" style="margin-top:12px"></div>
         </div>
 
@@ -207,14 +193,11 @@
     </div>
   </div>
 
-  <script>
-    // Path to uploaded Excel file (kept so you can implement import later)
-    const UPLOADED_FILE_URL = "/mnt/data/LLZ Field Reading.xls";
-  </script>
+  <script> const UPLOADED_FILE_URL = "/mnt/data/LLZ Field Reading.xls"; </script>
 
-  <script src="app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

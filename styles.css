@@ -16,7 +16,7 @@ body{font-family:system-ui, Arial, sans-serif;margin:0;background:var(--bg);colo
 .actions{margin-top:10px}
 .btn{padding:10px 12px;border-radius:10px;border:1px solid #ccc;background:#fff;cursor:pointer;font-weight:700}
 .btn.small{padding:6px 8px;font-size:13px}
-.btn.primary{Background:var(--accent);color:#fff;border:none}
+.btn.primary{background:var(--accent);color:#fff;border:none}
 .btn.danger{background:var(--danger);color:#fff;border:none}
 .note{font-size:13px;color:var(--muted);margin:8px 0}
 .hidden{display:none}
@@ -52,6 +52,9 @@ body{font-family:system-ui, Arial, sans-serif;margin:0;background:var(--bg);colo
 
 /* Sign prefix */
 .signPrefix{display:inline-block;min-width:22px;text-align:center;font-weight:800;margin-right:6px;color:#222}
+
+/* Chart wrapper to control height */
+.chartWrap{ background:#fff;border-radius:6px;padding:6px;border:1px solid #eee; margin-bottom:8px; }
 
 /* combined table style (horizontal excel style) */
 .tableCard{margin-top:10px;padding:8px;background:#fff;border-radius:8px;border:1px solid #eee; overflow:auto}

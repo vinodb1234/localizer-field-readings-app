@@ -1,22 +1,30 @@
-/* app.js - final v6
-   - PDF export in landscape A4 and auto-scales table images to page width
-   - Exports graph images (PNG) for TX1 and TX2
-   - Combined horizontal tables per TX (angles as columns)
-   - Graphs show all angle ticks and use absolute magnitudes for plotting
+/* app.js - final v7
+   - ANGLES include -15 and +15
+   - Chart Y-range locked to [-5,50]
+   - Chart plugin draws white background before draw (so PNGs have white bg)
+   - PDFs exported in landscape A4; html2canvas scale increased to 2 for sharper table images
+   - Graph styling tuned (thicker lines, markers, bold title)
 */
 
 const ANGLES = [
-  -35,-30,-25,-20,-14,-13,-12,-11,-10,
-  -9,-8,-7,-6,-5,-4,-3,-2.5,-2,-1.5,-1,-0.5,
-  0,0.5,1,1.5,2,2.5,3,4,5,6,7,8,9,10,11,12,13,14,20,25,30,35
+  -35, -30, -25, -20,
+  -15, -14, -13, -12, -11, -10,
+  -9, -8, -7, -6, -5, -4, -3,
+  -2.5, -2, -1.5, -1, -0.5,
+   0,
+   0.5, 1, 1.5, 2, 2.5,
+   3, 4, 5, 6, 7, 8, 9, 10,
+  11, 12, 13, 14, 15,
+  20, 25, 30, 35
 ];
 
-const STORAGE_KEY = 'llz_final_v6';
+const STORAGE_KEY = 'llz_final_v7';
 
 let state = {
   meta: { station:'', freq:'', make:'', model:'', refDate:'', presDate:'', course:'' },
   values: { tx1:{present:[], reference:[]}, tx2:{present:[], reference:[]} },
-  current: { stage:'present', tx:null, direction:'neg2pos', idx:0 }
+  current: { stage:'present', tx:null, direction:'neg2pos', idx:0 },
+  compiled: null
 };
 
 function initArrays(){
@@ -37,10 +45,20 @@ function loadState(){
     try{
       const l = JSON.parse(raw);
       if(l.meta) state.meta = Object.assign(state.meta, l.meta);
-      if(l.values) state.values = Object.assign(state.values, l.values);
+      if(l.values) {
+        // ensure arrays length
+        Object.keys(l.values).forEach(tx=>{
+          ['present','reference'].forEach(stage=>{
+            if(Array.isArray(l.values[tx][stage]) && l.values[tx][stage].length === ANGLES.length){
+              state.values[tx][stage] = l.values[tx][stage];
+            }
+          });
+        });
+      }
       if(l.current) state.current = Object.assign(state.current, l.current);
     }catch(e){ console.warn(e); initArrays(); }
   }
+  // validate
   ['tx1','tx2'].forEach(tx=>{ ['present','reference'].forEach(stage=>{
     if(!Array.isArray(state.values[tx][stage]) || state.values[tx][stage].length !== ANGLES.length) state.values[tx][stage] = ANGLES.map(()=>({DDM:null, SDM:null, RF:null}));
   })});
@@ -48,35 +66,32 @@ function loadState(){
 }
 loadState();
 
-// page helpers
+/* ---------- UI helpers ---------- */
 function showPage(id){ document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden')); const e=$(id); if(e) e.classList.remove('hidden'); window.scrollTo(0,0); }
 
-// meta
 function populateMetaFromUI(){ state.meta.station = $('station').value.trim(); state.meta.freq = $('freq').value.trim(); state.meta.make = $('make').value.trim(); state.meta.model = $('model').value.trim(); state.meta.refDate = $('refDate').value.trim(); state.meta.presDate = $('presDate').value.trim(); state.meta.course = $('course').value.trim(); saveState(); updateDashboardButtons(); }
 function formatDateOK(s){ return /^\d{2}-\d{2}-\d{4}$/.test(s); }
 function applyHeaderCheck(){ const ref = $('refDate').value.trim(), pres = $('presDate').value.trim(); if(!formatDateOK(ref) || !formatDateOK(pres)){ alert('Enter dates in DD-MM-YYYY'); return false; } return true; }
 
-// bottom sheet / toast
+function showToast(msg,ms=1500){ let t = document.querySelector('.toast'); if(!t){ t = el('div','toast'); document.body.appendChild(t); } t.textContent = msg; t.classList.add('show'); setTimeout(()=> t.classList.remove('show'), ms); }
+
+/* bottom sheet */
 function createBottomSheet(){ if(document.querySelector('.bs-overlay')) return; const overlay = el('div','bs-overlay'); overlay.innerHTML = `<div class="bottom-sheet"><div class="bs-handle"></div><div class="sheet-title" id="sheetTitle"></div><div class="sheet-sub" id="sheetSub"></div><div class="sheet-buttons" id="sheetButtons"></div></div>`; document.body.appendChild(overlay); overlay.addEventListener('click', e=>{ if(e.target===overlay) hideBottomSheet(); }); }
 function showBottomSheet(title, sub, buttons){ createBottomSheet(); const overlay = document.querySelector('.bs-overlay'); const sheet = overlay.querySelector('.bottom-sheet'); overlay.classList.add('show'); setTimeout(()=> sheet.classList.add('show'),20); $('sheetTitle').textContent = title||''; $('sheetSub').textContent = sub||''; const c = $('sheetButtons'); c.innerHTML=''; buttons.forEach(b=>{ const btn = el('button','sheet-btn'); btn.textContent = b.label; if(b.kind==='primary') btn.classList.add('primary'); btn.onclick = ()=>{ hideBottomSheet(); setTimeout(()=> b.action && b.action(),240); }; c.appendChild(btn); }); }
 function hideBottomSheet(){ const overlay=document.querySelector('.bs-overlay'); if(!overlay) return; const sheet=overlay.querySelector('.bottom-sheet'); sheet.classList.remove('show'); setTimeout(()=> overlay.classList.remove('show'),260); }
-function showToast(msg,ms=1500){ let t = document.querySelector('.toast'); if(!t){ t = el('div','toast'); document.body.appendChild(t); } t.textContent = msg; t.classList.add('show'); setTimeout(()=> t.classList.remove('show'), ms); }
 
-// wizard helpers
+/* ---------- Wizard logic ---------- */
 function getOrderIndex(idx){ return state.current.direction === 'neg2pos' ? idx : (ANGLES.length - 1 - idx); }
 
 function updateDDMSignUI(angle, saved){
-  const prefix = $('ddmSignPrefix');
-  const signGroup = $('ddmSignGroup');
+  const prefix = $('ddmSignPrefix'); const signGroup = $('ddmSignGroup');
   if(angle === 0){
     prefix.style.display = 'none';
     signGroup.style.display = 'block';
     if(saved && saved.DDM !== null){
       if(saved.DDM < 0) $('ddmMinus').checked = true;
       else $('ddmPlus').checked = true;
-    } else {
-      $('ddmPlus').checked = true;
-    }
+    } else $('ddmPlus').checked = true;
   } else {
     signGroup.style.display = 'none';
     prefix.style.display = 'inline-block';
@@ -86,8 +101,7 @@ function updateDDMSignUI(angle, saved){
 
 function showWizardForCurrent(){
   if(!state.current.tx){ alert('Please select a transmitter'); return; }
-  const tx = state.current.tx;
-  const stage = state.current.stage;
+  const tx = state.current.tx, stage = state.current.stage;
   const total = ANGLES.length;
   if(state.current.idx < 0) state.current.idx = 0;
   if(state.current.idx >= total) state.current.idx = total - 1;
@@ -107,8 +121,7 @@ function showWizardForCurrent(){
 
 function wizardSaveCurrent(){
   if(!state.current.tx){ alert('No transmitter selected'); return false; }
-  const tx = state.current.tx;
-  const stage = state.current.stage;
+  const tx = state.current.tx; const stage = state.current.stage;
   const orderIdx = getOrderIndex(state.current.idx);
   const angle = ANGLES[orderIdx];
 
@@ -120,7 +133,6 @@ function wizardSaveCurrent(){
   if(sdmNum !== null && isNaN(sdmNum)){ alert('SDM must be numeric'); return false; }
   if(rfNum !== null && isNaN(rfNum)){ alert('RF must be numeric'); return false; }
 
-  // sign rules
   if(ddmNum !== null){
     if(angle < 0) ddmNum = -Math.abs(ddmNum);
     else if(angle > 0) ddmNum = Math.abs(ddmNum);
@@ -140,115 +152,54 @@ function wizardSaveCurrent(){
 
 function wizardNext(){ if(!wizardSaveCurrent()) return; state.current.idx++; if(state.current.idx >= ANGLES.length) state.current.idx = ANGLES.length - 1; showWizardForCurrent(); }
 function wizardPrev(){ wizardSaveCurrent(); state.current.idx--; if(state.current.idx < 0) state.current.idx = 0; showWizardForCurrent(); }
+function updateNextButtonsVisibility(){ const ddmVal = $('ddmInput').value.trim(); const sdmVal = $('sdmInput').value.trim(); const rfVal = $('rfInput').value.trim(); const ddn = $('ddmNext'), sdn = $('sdmNext'), rfn = $('rfNext'); if(ddn) ddn.classList.toggle('hidden', ddmVal === ''); if(sdn) sdn.classList.toggle('hidden', sdmVal === ''); if(rfn) rfn.classList.toggle('hidden', rfVal === ''); }
 
-function updateNextButtonsVisibility(){
-  const ddmVal = $('ddmInput').value.trim();
-  const sdmVal = $('sdmInput').value.trim();
-  const rfVal = $('rfInput').value.trim();
-  const ddn = $('ddmNext'), sdn = $('sdmNext'), rfn = $('rfNext');
-  if(ddn) ddn.classList.toggle('hidden', ddmVal === '');
-  if(sdn) sdn.classList.toggle('hidden', sdmVal === '');
-  if(rfn) rfn.classList.toggle('hidden', rfVal === '');
-}
-
-// dashboard & flow
+/* ---------- Dashboard flow ---------- */
 function updateDashboardButtons(){
   const anyPresent = isStageComplete('tx1','present') || isStageComplete('tx2','present');
   const anyRef = isStageComplete('tx1','reference') || isStageComplete('tx2','reference');
   const chooseResults = $('chooseResults');
-  if(chooseResults){
-    chooseResults.style.display = (anyPresent || anyRef) ? 'inline-block' : 'none';
-  }
+  if(chooseResults) chooseResults.style.display = (anyPresent || anyRef) ? 'inline-block' : 'none';
   const progress = $('stageProgress');
-  if(progress){
-    progress.textContent = `Status — P: TX1 ${isStageComplete('tx1','present')?'✓':'—'}  TX2 ${isStageComplete('tx2','present')?'✓':'—'}  |  R: TX1 ${isStageComplete('tx1','reference')?'✓':'—'}  TX2 ${isStageComplete('tx2','reference')?'✓':'—'}`;
-  }
+  if(progress) progress.textContent = `Status — P: TX1 ${isStageComplete('tx1','present')?'✓':'—'}  TX2 ${isStageComplete('tx2','present')?'✓':'—'}  |  R: TX1 ${isStageComplete('tx1','reference')?'✓':'—'}  TX2 ${isStageComplete('tx2','reference')?'✓':'—'}`;
 }
 
 function startStage(stage){
-  state.current.stage = stage;
-  state.current.tx = null;
-  state.current.direction = 'neg2pos';
-  state.current.idx = 0;
-  saveState();
-  updateTxCardStatus();
-  $('txselectHeader').textContent = `${stage.toUpperCase()} — choose transmitter`;
-  showPage('page-txselect');
+  state.current.stage = stage; state.current.tx = null; state.current.direction = 'neg2pos'; state.current.idx = 0; saveState(); updateTxCardStatus(); $('txselectHeader').textContent = `${stage.toUpperCase()} — choose transmitter`; showPage('page-txselect');
 }
+function updateTxCardStatus(){ ['tx1','tx2'].forEach(tx=>{ const elId = tx === 'tx1' ? 'tx1Card' : 'tx2Card'; const card = $(elId); const presentDone = isStageComplete(tx,'present'); const refDone = isStageComplete(tx,'reference'); const foot = tx === 'tx1' ? $('tx1Status') : $('tx2Status'); if(foot) foot.textContent = `P:${presentDone? '✓':'—'}  R:${refDone? '✓':'—'}`; if(card) card.classList.toggle('completed', presentDone && refDone); }); }
 
-function updateTxCardStatus(){
-  ['tx1','tx2'].forEach(tx=>{
-    const elId = tx === 'tx1' ? 'tx1Card' : 'tx2Card';
-    const card = $(elId);
-    const presentDone = isStageComplete(tx,'present');
-    const refDone = isStageComplete(tx,'reference');
-    const foot = tx === 'tx1' ? $('tx1Status') : $('tx2Status');
-    if(foot) foot.textContent = `P:${presentDone? '✓':'—'}  R:${refDone? '✓':'—'}`;
-    if(card){ card.classList.toggle('completed', presentDone && refDone); }
-  });
-}
-
-function onTxChosen(tx){
-  state.current.tx = tx;
-  $('dirHeader').textContent = `Select Angle Direction for ${tx.toUpperCase()} (${state.current.stage.toUpperCase()})`;
-  if(state.current.direction === 'pos2neg') $('dirPos2Neg').checked = true; else $('dirNeg2Pos').checked = true;
-  showPage('page-direction');
-}
-
-function onDirectionContinue(){
-  const sel = document.querySelector('input[name="angleDir"]:checked');
-  if(!sel){ alert('Choose direction'); return; }
-  state.current.direction = sel.value;
-  state.current.idx = 0;
-  saveState();
-  showPage('page-wizard');
-  showWizardForCurrent();
-}
+function onTxChosen(tx){ state.current.tx = tx; $('dirHeader').textContent = `Select Angle Direction for ${tx.toUpperCase()} (${state.current.stage.toUpperCase()})`; if(state.current.direction === 'pos2neg') $('dirPos2Neg').checked = true; else $('dirNeg2Pos').checked = true; showPage('page-direction'); }
+function onDirectionContinue(){ const sel = document.querySelector('input[name="angleDir"]:checked'); if(!sel){ alert('Choose direction'); return; } state.current.direction = sel.value; state.current.idx = 0; saveState(); showPage('page-wizard'); showWizardForCurrent(); }
 
 function finishTxAndBack(){
   if(!wizardSaveCurrent()) return;
-  const finishedTx = state.current.tx;
-  const stage = state.current.stage;
+  const finishedTx = state.current.tx; const stage = state.current.stage;
   showToast(`${finishedTx.toUpperCase()} ${stage.toUpperCase()} saved`);
-  state.current.tx = null;
-  state.current.idx = 0;
-  saveState();
-  updateTxCardStatus();
+  state.current.tx = null; state.current.idx = 0; saveState(); updateTxCardStatus();
 
   const bothDoneThisStage = isStageComplete('tx1', stage) && isStageComplete('tx2', stage);
   if(bothDoneThisStage){
     const otherStage = (stage === 'present') ? 'reference' : 'present';
     const allDone = isStageComplete('tx1','present') && isStageComplete('tx2','present') && isStageComplete('tx1','reference') && isStageComplete('tx2','reference');
     if(allDone){
-      showBottomSheet(
-        `All readings completed`,
-        `All Present and Reference readings for both TXs completed.`,
-        [
-          { label: 'View Results', kind:'primary', action: ()=> { populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); } },
-          { label: 'Back to Dashboard', kind:'secondary', action: ()=> { showPage('page-stage'); updateDashboardButtons(); } }
-        ]
-      );
+      showBottomSheet(`All readings completed`,`All Present and Reference readings for both TXs completed.`,[
+        { label: 'View Results', kind:'primary', action: ()=> { populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); } },
+        { label: 'Back to Dashboard', kind:'secondary', action: ()=> { showPage('page-stage'); updateDashboardButtons(); } }
+      ]);
       return;
     }
-    showBottomSheet(
-      `${stage.toUpperCase()} readings completed`,
-      `Proceed to ${otherStage.toUpperCase()} readings?`,
-      [
-        { label: `Start ${otherStage.toUpperCase()}`, kind:'primary', action: ()=> { startStage(otherStage); } },
-        { label: 'Stay here', kind:'secondary', action: ()=> { showPage('page-txselect'); } },
-        { label: 'View Results', kind:'ghost', action: ()=> { populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); } }
-      ]
-    );
+    showBottomSheet(`${stage.toUpperCase()} readings completed`,`Proceed to ${otherStage.toUpperCase()} readings?`,[
+      { label: `Start ${otherStage.toUpperCase()}`, kind:'primary', action: ()=> { startStage(otherStage); } },
+      { label: 'Stay here', kind:'secondary', action: ()=> { showPage('page-txselect'); } },
+      { label: 'View Results', kind:'ghost', action: ()=> { populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); } }
+    ]);
   } else {
-    showBottomSheet(
-      `${finishedTx.toUpperCase()} ${stage.toUpperCase()} completed`,
-      `What would you like to do next for ${stage.toUpperCase()}?`,
-      [
-        { label: `Enter other TX (${ finishedTx === 'tx1' ? 'TX2' : 'TX1' })`, kind:'primary', action: ()=> { startStage(stage); } },
-        { label: `Redo ${finishedTx.toUpperCase()}`, kind:'secondary', action: ()=> { state.current.tx = finishedTx; showPage('page-direction'); } },
-        { label: 'View Results', kind:'ghost', action: ()=> { populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); } }
-      ]
-    );
+    showBottomSheet(`${finishedTx.toUpperCase()} ${stage.toUpperCase()} completed`,`What would you like to do next for ${stage.toUpperCase()}?`,[
+      { label: `Enter other TX (${ finishedTx === 'tx1' ? 'TX2' : 'TX1' })`, kind:'primary', action: ()=> { startStage(stage); } },
+      { label: `Redo ${finishedTx.toUpperCase()}`, kind:'secondary', action: ()=> { state.current.tx = finishedTx; showPage('page-direction'); } },
+      { label: 'View Results', kind:'ghost', action: ()=> { populateResultsMeta(); buildAllCombinedTables(); showPage('page-results'); } }
+    ]);
   }
 }
 
@@ -261,32 +212,24 @@ function isStageComplete(tx, stage){
   return true;
 }
 
-// RESULTS: combined tables & compute
+/* ---------- Results, tables, compute & plotting ---------- */
 function populateResultsMeta(){
-  const m = state.meta;
-  const el = $('resultsMeta');
+  const m = state.meta; const el = $('resultsMeta');
   if(el) el.textContent = `Station: ${m.station||''}   Freq: ${m.freq||''} MHz   REF: ${m.refDate||''}   PRES: ${m.presDate||''}   Make: ${m.make||''}   Model: ${m.model||''}`;
 }
 
-// Build combined horizontal table for a transmitter (A-style order)
 function buildCombinedTable(tx){
   const targetId = tx === 'tx1' ? 'table_tx1_combined' : 'table_tx2_combined';
   const wrapper = $(targetId);
   if(!wrapper) return;
-  wrapper.innerHTML = ''; // clear
+  wrapper.innerHTML = '';
 
-  // build table element
   const tbl = el('table');
-  // header row: first cell "ANGLE" then all angle headers
-  const thead = el('thead');
-  const headRow = el('tr');
-  const th0 = el('th'); th0.textContent = 'ANGLE';
-  headRow.appendChild(th0);
+  const thead = el('thead'); const headRow = el('tr');
+  const th0 = el('th'); th0.textContent = 'ANGLE'; headRow.appendChild(th0);
   ANGLES.forEach(a=>{ const th = el('th'); th.textContent = a; headRow.appendChild(th); });
-  thead.appendChild(headRow);
-  tbl.appendChild(thead);
+  thead.appendChild(headRow); tbl.appendChild(thead);
 
-  // helper to create row
   const addRow = (label, arrValues) => {
     const tr = el('tr');
     const th = el('th'); th.textContent = label; tr.appendChild(th);
@@ -294,11 +237,9 @@ function buildCombinedTable(tx){
     return tr;
   };
 
-  // fetch signed arrays for ref and present
-  const refArr = state.values[tx].reference.map(o => o); // objects
+  const refArr = state.values[tx].reference.map(o => o);
   const presArr = state.values[tx].present.map(o => o);
 
-  // rows in requested order:
   const tbody = el('tbody');
   const ddmRef = refArr.map(x => x.DDM === null ? '' : x.DDM);
   const ddmPres = presArr.map(x => x.DDM === null ? '' : x.DDM);
@@ -318,14 +259,22 @@ function buildCombinedTable(tx){
   wrapper.appendChild(tbl);
 }
 
-// Build both combined tables
-function buildAllCombinedTables(){
-  buildCombinedTable('tx1');
-  buildCombinedTable('tx2');
-}
+function buildAllCombinedTables(){ buildCombinedTable('tx1'); buildCombinedTable('tx2'); }
 
-// compute absolute arrays and prepare for plotting
 let charts = {};
+// Chart.js plugin to ensure white background for canvas export
+const whiteBgPlugin = {
+  id: 'whiteBg',
+  beforeDraw: (chart) => {
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, chart.width, chart.height);
+    ctx.restore();
+  }
+};
+
 function calculateAll(){
   const compiled = {};
   ['tx1','tx2'].forEach(tx=>{
@@ -349,7 +298,6 @@ function calculateAll(){
   buildAllCombinedTables();
 }
 
-// Plot combined graphs with all angle labels shown
 function plotCombinedGraphs(compiled){
   const colors = {
     ddm_pres: 'rgb(2, 119, 189)',
@@ -360,86 +308,74 @@ function plotCombinedGraphs(compiled){
     rf_ref:   'rgba(192,57,43,0.45)'
   };
   const makeDataset = (label, data, color, dash=false) => ({
-    label,
-    data,
-    fill: false,
-    borderColor: color,
-    backgroundColor: color,
-    tension: 0.12,
-    pointRadius: 2,
+    label, data, fill: false, borderColor: color, backgroundColor: color,
+    tension: 0.08, pointRadius: 3, pointHoverRadius:4, borderWidth: 2,
     borderDash: dash ? [6,4] : []
   });
+
+  const commonOptions = {
+    plugins: {
+      legend: { position: 'right', labels:{boxWidth:12} },
+      title: { display:true, text:'', font: { size: 14, weight: '700' } }
+    },
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      x: { title: { display:true, text: 'Angle (°)' }, ticks: { autoSkip:false, maxRotation:90, minRotation:90 } },
+      y: { title: { display:true, text: 'Magnitude (absolute values)' }, beginAtZero:true, min:-5, max:50 }
+    }
+  };
 
   // TX1
   const tx1 = compiled.tx1;
   const ds1 = [
-    makeDataset('DDM Present', tx1.present.ddm_abs, colors.ddm_pres),
-    makeDataset('DDM Reference', tx1.reference.ddm_abs, colors.ddm_ref, false),
-    makeDataset('SDM Present', tx1.present.sdm_abs, colors.sdm_pres),
-    makeDataset('SDM Reference', tx1.reference.sdm_abs, colors.sdm_ref, false),
-    makeDataset('RF Present', tx1.present.rf_abs, colors.rf_pres),
-    makeDataset('RF Reference', tx1.reference.rf_abs, colors.rf_ref, false)
+    makeDataset('DDM REF', tx1.reference.ddm_abs, colors.ddm_ref),
+    makeDataset('DDM PRES', tx1.present.ddm_abs, colors.ddm_pres),
+    makeDataset('SDM REF', tx1.reference.sdm_abs, colors.sdm_ref),
+    makeDataset('SDM PRES', tx1.present.sdm_abs, colors.sdm_pres),
+    makeDataset('RF REF', tx1.reference.rf_abs, colors.rf_ref),
+    makeDataset('RF PRES', tx1.present.rf_abs, colors.rf_pres)
   ];
   const c1 = document.getElementById('chart_tx1_all');
   if(c1){
     if(charts['chart_tx1_all']) charts['chart_tx1_all'].destroy();
+    c1.height = 350;
     const ctx1 = c1.getContext('2d');
     charts['chart_tx1_all'] = new Chart(ctx1, {
-      type: 'line',
-      data: { labels: ANGLES, datasets: ds1 },
-      options: {
-        responsive: true,
-        interaction: { mode: 'index', intersect: false },
-        stacked: false,
-        plugins: { legend: { position: 'top' } },
-        scales: {
-          x: {
-            title: { display:true, text: 'Angle (°)' },
-            ticks: { autoSkip: false, maxRotation: 90, minRotation: 90 }
-          },
-          y: { title: { display:true, text: 'Magnitude (absolute values)' }, beginAtZero: true }
-        }
-      }
+      type:'line',
+      data:{ labels: ANGLES, datasets: ds1 },
+      options: Object.assign({}, commonOptions, { plugins: { ...commonOptions.plugins, title: { display:true, text: `LOC TX.A  ${state.meta.presDate || ''}` } } }),
+      plugins: [whiteBgPlugin]
     });
   }
 
   // TX2
   const tx2 = compiled.tx2;
   const ds2 = [
-    makeDataset('DDM Present', tx2.present.ddm_abs, colors.ddm_pres),
-    makeDataset('DDM Reference', tx2.reference.ddm_abs, colors.ddm_ref, false),
-    makeDataset('SDM Present', tx2.present.sdm_abs, colors.sdm_pres),
-    makeDataset('SDM Reference', tx2.reference.sdm_abs, colors.sdm_ref, false),
-    makeDataset('RF Present', tx2.present.rf_abs, colors.rf_pres),
-    makeDataset('RF Reference', tx2.reference.rf_abs, colors.rf_ref, false)
+    makeDataset('DDM REF', tx2.reference.ddm_abs, colors.ddm_ref),
+    makeDataset('DDM PRES', tx2.present.ddm_abs, colors.ddm_pres),
+    makeDataset('SDM REF', tx2.reference.sdm_abs, colors.sdm_ref),
+    makeDataset('SDM PRES', tx2.present.sdm_abs, colors.sdm_pres),
+    makeDataset('RF REF', tx2.reference.rf_abs, colors.rf_ref),
+    makeDataset('RF PRES', tx2.present.rf_abs, colors.rf_pres)
   ];
   const c2 = document.getElementById('chart_tx2_all');
   if(c2){
     if(charts['chart_tx2_all']) charts['chart_tx2_all'].destroy();
+    c2.height = 350;
     const ctx2 = c2.getContext('2d');
     charts['chart_tx2_all'] = new Chart(ctx2, {
-      type: 'line',
-      data: { labels: ANGLES, datasets: ds2 },
-      options: {
-        responsive: true,
-        interaction: { mode: 'index', intersect: false },
-        stacked: false,
-        plugins: { legend: { position: 'top' } },
-        scales: {
-          x: {
-            title: { display:true, text: 'Angle (°)' },
-            ticks: { autoSkip: false, maxRotation: 90, minRotation: 90 }
-          },
-          y: { title: { display:true, text: 'Magnitude (absolute values)' }, beginAtZero: true }
-        }
-      }
+      type:'line',
+      data:{ labels: ANGLES, datasets: ds2 },
+      options: Object.assign({}, commonOptions, { plugins: { ...commonOptions.plugins, title: { display:true, text: `LOC TX.B  ${state.meta.presDate || ''}` } } }),
+      plugins: [whiteBgPlugin]
     });
   }
 
   $('plotsArea').classList.remove('hidden');
 }
 
-// render summary
 function renderSummary(compiled){
   const out = [];
   ['tx1','tx2'].forEach(tx=>{
@@ -451,17 +387,13 @@ function renderSummary(compiled){
   $('resultsSummary').classList.remove('hidden');
 }
 
-// CSV (same)
+/* ---------- Export functions ---------- */
 function exportCsv(){
-  const m = state.meta;
-  const rows = [];
-  rows.push(`Station,${m.station||''}`);
-  rows.push(`Frequency,${m.freq||''}`);
-  rows.push('');
+  const m = state.meta; const rows = [];
+  rows.push(`Station,${m.station||''}`); rows.push(`Frequency,${m.freq||''}`); rows.push('');
   ['tx1','tx2'].forEach(tx=>{
     ['present','reference'].forEach(type=>{
-      rows.push(`${tx.toUpperCase()} - ${type.toUpperCase()}`);
-      rows.push('Angle,DDM,SDM,RF');
+      rows.push(`${tx.toUpperCase()} - ${type.toUpperCase()}`); rows.push('Angle,DDM,SDM,RF');
       state.values[tx][type].forEach((r,i)=> rows.push(`${ANGLES[i]},${r.DDM===null?'':r.DDM},${r.SDM===null?'':r.SDM},${r.RF===null?'':r.RF}`));
       rows.push('');
     });
@@ -470,11 +402,10 @@ function exportCsv(){
   const a = document.createElement('a'); a.href = url; a.download = 'llz_export.csv'; a.click(); URL.revokeObjectURL(url);
 }
 
-// PDF export: landscape A4 with auto-scale of table images
+// improved PDF export (landscape) and auto-scale elements to page width
 async function exportPdf(){
   if(!state.compiled) calculateAll();
-  // ensure charts & tables are ready
-  await new Promise(r => setTimeout(r, 300));
+  await new Promise(r=>setTimeout(r,300)); // let charts render
 
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF('l','pt','a4'); // landscape
@@ -485,25 +416,18 @@ async function exportPdf(){
   pdf.setFontSize(12);
   const header = `Station: ${state.meta.station||''}   Freq: ${state.meta.freq||''} MHz   REF: ${state.meta.refDate||''}   PRES: ${state.meta.presDate||''}   Make: ${state.meta.make||''}   Model: ${state.meta.model||''}`;
   pdf.text(header, margin, 40);
-
   let cursorY = 60;
 
-  // draw canvas -> pdf
+  // helper to add canvas
   const addCanvasImage = (canvas, maxW, yPos) => {
-    const dataUrl = canvas.toDataURL('image/png');
-    const img = new Image();
-    img.src = dataUrl;
+    const dataUrl = canvas.toDataURL('image/png', 1.0);
+    const img = new Image(); img.src = dataUrl;
     return new Promise((resolve)=>{
       img.onload = ()=>{
-        const imgW = img.width;
-        const imgH = img.height;
+        const imgW = img.width, imgH = img.height;
         const scale = Math.min(1, maxW / imgW);
-        const drawW = imgW * scale;
-        const drawH = imgH * scale;
-        if(yPos + drawH + 60 > pageH){
-          pdf.addPage();
-          yPos = margin;
-        }
+        const drawW = imgW * scale, drawH = imgH * scale;
+        if(yPos + drawH + 40 > pageH){ pdf.addPage(); yPos = margin; }
         pdf.addImage(dataUrl, 'PNG', margin, yPos, drawW, drawH);
         resolve(yPos + drawH + 12);
       };
@@ -511,23 +435,17 @@ async function exportPdf(){
     });
   };
 
-  // element -> image via html2canvas -> pdf (auto-scale)
+  // element -> image via html2canvas with higher scale for crispness
   const addElementImage = (elNode, maxW, yPos) => {
-    return html2canvas(elNode, { scale: 1.25 }).then(canvas =>{
+    return html2canvas(elNode, { scale: 2, backgroundColor: '#ffffff', useCORS: true }).then(canvas =>{
       const dataUrl = canvas.toDataURL('image/png');
-      const img = new Image();
-      img.src = dataUrl;
+      const img = new Image(); img.src = dataUrl;
       return new Promise((resolve)=>{
         img.onload = ()=>{
-          const imgW = img.width;
-          const imgH = img.height;
+          const imgW = img.width, imgH = img.height;
           const scale = Math.min(1, maxW / imgW);
-          const drawW = imgW * scale;
-          const drawH = imgH * scale;
-          if(yPos + drawH + 60 > pageH){
-            pdf.addPage();
-            yPos = margin;
-          }
+          const drawW = imgW * scale, drawH = imgH * scale;
+          if(yPos + drawH + 40 > pageH){ pdf.addPage(); yPos = margin; }
           pdf.addImage(dataUrl, 'PNG', margin, yPos, drawW, drawH);
           resolve(yPos + drawH + 12);
         };
@@ -538,48 +456,30 @@ async function exportPdf(){
 
   const maxImgWidth = pageW - margin*2;
 
-  // TX1: chart then table
+  // TX1
   const c1 = document.getElementById('chart_tx1_all');
-  if(c1){
-    cursorY = await addCanvasImage(c1, maxImgWidth, cursorY);
-  }
+  if(c1) cursorY = await addCanvasImage(c1, maxImgWidth, cursorY);
   const table1 = document.getElementById('table_tx1_combined');
-  if(table1){
-    cursorY = await addElementImage(table1, maxImgWidth, cursorY);
-  }
+  if(table1) cursorY = await addElementImage(table1, maxImgWidth, cursorY);
 
-  // TX2: chart then table
+  // TX2
   const c2 = document.getElementById('chart_tx2_all');
-  if(c2){
-    cursorY = await addCanvasImage(c2, maxImgWidth, cursorY);
-  }
+  if(c2) cursorY = await addCanvasImage(c2, maxImgWidth, cursorY);
   const table2 = document.getElementById('table_tx2_combined');
-  if(table2){
-    cursorY = await addElementImage(table2, maxImgWidth, cursorY);
-  }
+  if(table2) cursorY = await addElementImage(table2, maxImgWidth, cursorY);
 
-  pdf.save('llz_report_graphs_tables_landscape.pdf');
+  pdf.save('llz_report_graphs_tables_landscape_v7.pdf');
 }
 
-// Export graph images (PNG) for tx1 and tx2
+// Export PNGs (white background ensured by plugin)
 function exportGraphImages(){
-  const c1 = document.getElementById('chart_tx1_all');
-  const c2 = document.getElementById('chart_tx2_all');
-  const downloadImage = (dataUrl, filename) => {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = filename;
-    a.click();
-  };
-  if(c1){
-    try{ downloadImage(c1.toDataURL('image/png'), 'tx1_graph.png'); }catch(e){ showToast('TX1 export failed'); }
-  }
-  if(c2){
-    try{ downloadImage(c2.toDataURL('image/png'), 'tx2_graph.png'); }catch(e){ showToast('TX2 export failed'); }
-  }
+  const c1 = document.getElementById('chart_tx1_all'), c2 = document.getElementById('chart_tx2_all');
+  const downloadImage = (dataUrl, filename) => { const a = document.createElement('a'); a.href = dataUrl; a.download = filename; a.click(); };
+  if(c1){ try{ downloadImage(c1.toDataURL('image/png',1.0), 'tx1_graph.png'); } catch(e){ showToast('TX1 export failed'); } }
+  if(c2){ try{ downloadImage(c2.toDataURL('image/png',1.0), 'tx2_graph.png'); } catch(e){ showToast('TX2 export failed'); } }
 }
 
-// wiring
+/* ---------- Wiring ---------- */
 document.addEventListener('DOMContentLoaded', ()=>{
 
   // populate meta
@@ -592,18 +492,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
   $('course').value = state.meta.course || '';
 
   // HOME
-  $('btnHome').addEventListener('click', ()=>{
-    if(state.meta && state.meta.station) { updateDashboardButtons(); showPage('page-stage'); }
-    else showPage('page-meta');
-  });
+  $('btnHome').addEventListener('click', ()=>{ if(state.meta && state.meta.station) { updateDashboardButtons(); showPage('page-stage'); } else showPage('page-meta'); });
 
   // meta Next
-  $('metaNext').addEventListener('click', ()=>{
-    if(!applyHeaderCheck()) return;
-    populateMetaFromUI();
-    updateDashboardButtons();
-    showPage('page-stage');
-  });
+  $('metaNext').addEventListener('click', ()=>{ if(!applyHeaderCheck()) return; populateMetaFromUI(); updateDashboardButtons(); showPage('page-stage'); });
 
   // clear saved
   $('clearAll').addEventListener('click', ()=>{ if(confirm('Clear all saved local entries?')){ localStorage.removeItem(STORAGE_KEY); location.reload(); } });
@@ -633,18 +525,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if($('rfNext')) $('rfNext').addEventListener('click', ()=> { wizardSaveCurrent(); wizardNext(); });
 
   // inputs: toggles
-  ['ddmInput','sdmInput','rfInput'].forEach(id=>{
-    const e = $(id); if(!e) return;
-    e.addEventListener('input', updateNextButtonsVisibility);
-    e.addEventListener('keydown', ev=>{
-      if(ev.key === 'Enter'){
-        ev.preventDefault();
-        if(id === 'ddmInput') $('sdmInput').focus();
-        else if(id === 'sdmInput') $('rfInput').focus();
-        else if(id === 'rfInput') { wizardSaveCurrent(); wizardNext(); }
-      }
-    });
-  });
+  ['ddmInput','sdmInput','rfInput'].forEach(id=>{ const e = $(id); if(!e) return; e.addEventListener('input', updateNextButtonsVisibility); e.addEventListener('keydown', ev=>{ if(ev.key === 'Enter'){ ev.preventDefault(); if(id === 'ddmInput') $('sdmInput').focus(); else if(id === 'sdmInput') $('rfInput').focus(); else if(id === 'rfInput') { wizardSaveCurrent(); wizardNext(); } } }); });
 
   // results actions
   $('showTables').addEventListener('click', ()=> { buildAllCombinedTables(); $('tablesArea').classList.toggle('hidden'); });
